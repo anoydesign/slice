@@ -40,6 +40,7 @@ import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { FrontendTimeEntry, DbItems, Preset } from './types';
 import { nanoid } from 'nanoid';
+import dynamic from 'next/dynamic';
 
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
@@ -94,8 +95,49 @@ const DEFAULT_PRESETS: Preset[] = [
     with: "個人",
     pccc: "P",
     remark: ""
+  },
+  {
+    id: "lunch",
+    name: "昼食",
+    time: "1:00",
+    content: "昼食",
+    client: "個人",
+    purpose: "食事",
+    action: "休憩",
+    with: "個人",
+    pccc: "P",
+    remark: ""
+  },
+  {
+    id: "reporting",
+    name: "報告書作成",
+    time: "1:00",
+    content: "報告書作成",
+    client: "社内",
+    purpose: "ドキュメント作成",
+    action: "資料作成",
+    with: "個人",
+    pccc: "P",
+    remark: ""
+  },
+  {
+    id: "research",
+    name: "リサーチ",
+    time: "1:30",
+    content: "リサーチ",
+    client: "プロジェクト",
+    purpose: "情報収集",
+    action: "調査",
+    with: "個人",
+    pccc: "P",
+    remark: ""
   }
 ];
+
+// LoadingOverlayコンポーネントはHTML/CSSで実装するので削除
+// const LoadingOverlay = dynamic(() => import('./components/LoadingOverlay'), {
+//   ssr: false,
+// });
 
 export default function Home() {
   const [date, setDate] = useState<Date | undefined>(new Date());
@@ -959,7 +1001,7 @@ export default function Home() {
     }
   };
 
-  // 前日のデータをインポート
+  // 前日のデータインポート機能を追加
   const importPreviousDay = async () => {
     try {
       if (!date) return;
@@ -991,25 +1033,10 @@ export default function Home() {
       }));
       
       // 業務開始時間に合わせて時間を再計算
-      const firstEndTime = getNextTimeSlot(startWorkTime);
-      newEntries[0] = {
-        ...newEntries[0],
-        time: `${startWorkTime} - ${firstEndTime}`
-      };
-      
-      let currentTime = firstEndTime;
-      for (let i = 1; i < newEntries.length; i++) {
-        const nextTime = getNextTimeSlot(currentTime);
-        newEntries[i] = {
-          ...newEntries[i],
-          time: `${currentTime} - ${nextTime}`
-        };
-        currentTime = nextTime;
-      }
-      
       setTimeEntries(newEntries);
-      showTemporaryMessage("前日のデータをインポートしました。", "success");
+      recalculateTimeEntries(startWorkTime);
       
+      showTemporaryMessage("前日のデータをインポートしました。", "success");
     } catch (error) {
       console.error("前日のデータのインポートに失敗しました:", error);
       showTemporaryMessage("エラー: 前日のデータのインポートに失敗しました。", "error");
@@ -1017,7 +1044,10 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 relative">
+      {/* LoadingOverlayコンポーネントは削除 */}
+      {/* {pageLoading && <LoadingOverlay />} */}
+      
       <h1 className="text-2xl font-bold mb-4">タイムスライス入力ツール</h1>
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
