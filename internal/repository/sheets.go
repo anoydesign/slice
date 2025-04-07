@@ -59,13 +59,24 @@ func (r *SheetsRepository) GetTimeEntries(date string) ([]models.TimeEntry, erro
 			continue
 		}
 
+		// Ensure row values are strings, handle potential type assertion errors
+		timeStr, _ := row[0].(string)
+		taskStr, _ := row[1].(string)
+		funcStr, _ := row[2].(string)
+		mallStr, _ := row[3].(string)
+		// row[4] is CostType, ignore it for the model
+		remarkStr := ""   // Default to empty string if not present or wrong type
+		if len(row) > 5 { // Check if the 6th element exists
+			remarkStr, _ = row[5].(string)
+		}
+
 		entry := models.TimeEntry{
-			Time:      row[0].(string),
-			Task:      row[1].(string),
-			Function:  row[2].(string),
-			Mall:      row[3].(string),
-			CostType:  row[4].(string),
-			UpdatedAt: row[5].(string),
+			Time:     timeStr,
+			Task:     taskStr,
+			Function: funcStr,
+			Mall:     mallStr,
+			Remark:   remarkStr, // Assign row[5] to Remark
+			// CostType and UpdatedAt are omitted as per model changes
 		}
 		entries = append(entries, entry)
 	}

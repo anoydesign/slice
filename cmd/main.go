@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/yourusername/timeslice-app/internal/handler"
 	"github.com/yourusername/timeslice-app/internal/repository"
@@ -32,6 +33,14 @@ func main() {
 
 	// Ginの設定
 	r := gin.Default()
+
+	// CORSミドルウェアの設定
+	// フロントエンドのオリジンを許可 (ポート番号が異なる場合でもOK)
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002"} // Add potential frontend ports
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
+	r.Use(cors.New(config))
 
 	// テンプレートと静的ファイルの設定
 	r.LoadHTMLGlob(filepath.Join(wd, "templates/*"))
