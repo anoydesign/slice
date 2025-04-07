@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { format, isValid } from "date-fns"; // Import isValid for date checking
+import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -31,47 +32,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableItem } from './components/SortableItem';
-
-// Define types for the data fetched from the API
-interface FrontendTimeEntry {
-  id: number;
-  time: string;
-  content: string;        // 内容
-  client: string;         // クライアント（誰に、誰のために）
-  purpose: string;        // 目的
-  action: string;         // アクション
-  with: string;          // 誰と
-  pccc: string;          // PC/CC
-  remark: string;        // 備考
-  selected: boolean;
-  hasError: boolean;
-}
-
-interface DbItems {
-  content: string[];      // 内容
-  client: string[];       // クライアント（誰に、誰のために）
-  purpose: string[];      // 目的
-  action: string[];       // アクション
-  with: string[];        // 誰と
-  pccc: string[];        // PC/CC
-  remark: string[];      // 備考
-}
-
-interface Preset {
-  id: string;
-  name: string;
-  time: string;
-  content: string;        // 内容
-  client: string;         // クライアント（誰に、誰のために）
-  purpose: string;        // 目的
-  action: string;         // アクション
-  with: string;          // 誰と
-  pccc: string;          // PC/CC
-  remark: string;        // 備考
-}
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import { FrontendTimeEntry, DbItems, Preset } from './types';
 
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
@@ -340,34 +306,7 @@ export default function Home() {
     const newItemValue = newDbItemValue.trim();
     setIsLoading(true);
     try {
-      // 既存のデータと新しい項目を組み合わせて送信
-      const itemsToSave = [
-        ...Object.entries(dbItems).flatMap(([type, values]: [string, string[]]) =>
-          values.map((value: string) => ({
-            Type: type,
-            Value: value
-          }))
-        ),
-        {
-          Type: newDbItemType,
-          Value: newItemValue
-        }
-      ];
-
-      // バックエンドに保存
-      const response = await fetch(`${API_BASE_URL}/api/db-items`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(itemsToSave),
-      });
-
-      if (!response.ok) {
-        throw new Error('項目の追加に失敗しました');
-      }
-
-      // 成功したらUIを更新
+      // UIのみで追加し、バックエンドAPIは呼び出さない
       setDbItems(prev => {
         const currentItems = prev[newDbItemType] || [];
         if (currentItems.includes(newItemValue)) {
@@ -378,7 +317,9 @@ export default function Home() {
           [newDbItemType]: [...currentItems, newItemValue]
         };
       });
+      
       setNewDbItemValue("");
+      showTemporaryMessage('項目を追加しました', 'success');
     } catch (error) {
       console.error('項目の追加エラー:', error);
       setError(error instanceof Error ? error.message : '項目の追加に失敗しました');
@@ -390,27 +331,13 @@ export default function Home() {
   const handleDeleteDbItem = async (type: keyof DbItems, itemToDelete: string) => {
     setIsLoading(true);
     try {
-      // バックエンドから削除
-      const response = await fetch(`${API_BASE_URL}/api/db-items`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([{
-          Type: type,
-          Value: itemToDelete
-        }]),
-      });
-
-      if (!response.ok) {
-        throw new Error('項目の削除に失敗しました');
-      }
-
-      // 成功したらUIを更新
+      // UIのみで削除し、バックエンドAPIは呼び出さない
       setDbItems(prev => ({
         ...prev,
         [type]: (prev[type] || []).filter(item => item !== itemToDelete)
       }));
+      
+      showTemporaryMessage('項目を削除しました', 'success');
     } catch (error) {
       console.error('項目の削除エラー:', error);
       setError(error instanceof Error ? error.message : '項目の削除に失敗しました');
@@ -707,10 +634,10 @@ export default function Home() {
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    if (active.id !== over.id) {
+    if (active.id !== over?.id) {
       setTimeEntries((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over?.id);
         const newItems = arrayMove(items, oldIndex, newIndex);
         
         // 新しい位置の前後の行の時間を取得
@@ -889,7 +816,7 @@ export default function Home() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
+                <CalendarComponent
                   mode="single"
                   selected={date}
                   onSelect={setDate} // Let the useEffect handle fetching
@@ -1051,42 +978,48 @@ export default function Home() {
 
         {/* Database Tab */}
         <TabsContent value="database">
-          <div className="mt-6 space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4">
+            {/* 警告メッセージ */}
+            <Alert variant="warning" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>業務データベースについての重要なお知らせ</AlertTitle>
+              <AlertDescription>
+                現在、技術的な問題により業務データベースの更新機能は無効になっています。項目の追加・削除はこの画面上でのみ反映され、スプレッドシートには保存されません。スプレッドシートのデータを更新する場合は、直接スプレッドシートを編集してください。
+              </AlertDescription>
+            </Alert>
+            
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold">業務データベース管理</h2>
+                <h2 className="text-2xl font-bold">業務データベース</h2>
                 <p className="text-muted-foreground mt-1">よく使う項目を登録して、入力をスピードアップしましょう。</p>
               </div>
-              <Button
-                variant="outline"
-                onClick={handleImportDbItems}
-                disabled={isLoading}
-                className="flex items-center gap-2"
-              >
-                {isLoading ? (
-                  "インポート中..."
-                ) : (
-                  <>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-gray-500"
-                    >
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="17 8 12 3 7 8"></polyline>
-                      <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    スプレッドシートからインポート
-                  </>
-                )}
-              </Button>
+              <div>
+                <Button variant="outline" onClick={handleImportDbItems} disabled={isLoading} className="flex items-center gap-2">
+                  {isLoading ? (
+                    "インポート中..."
+                  ) : (
+                    <>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-1"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      スプレッドシートからインポート
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
             {/* DB Add Form */} 
