@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yourusername/timeslice-app/internal/handler"
@@ -30,10 +31,12 @@ func main() {
 	}
 
 	// 一時的にcredentials.jsonを作成
-	if err := os.WriteFile("credentials.json", credentials, 0644); err != nil {
+	tempDir := os.TempDir()
+	credentialsPath := filepath.Join(tempDir, "credentials.json")
+	if err := os.WriteFile(credentialsPath, credentials, 0644); err != nil {
 		log.Fatalf("認証情報の書き込みに失敗しました: %v", err)
 	}
-	defer os.Remove("credentials.json")
+	defer os.Remove(credentialsPath)
 
 	// スプレッドシートの設定
 	ctx := context.Background()
@@ -43,7 +46,7 @@ func main() {
 	}
 
 	// リポジトリの初期化
-	repo, err := repository.NewSheetsRepository(ctx, "credentials.json", spreadsheetID)
+	repo, err := repository.NewSheetsRepository(ctx, credentialsPath, spreadsheetID)
 	if err != nil {
 		log.Fatalf("リポジトリの初期化に失敗しました: %v", err)
 	}
