@@ -1,18 +1,18 @@
 "use client"; // Make this a client component
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Button } from "./components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { Calendar as CalendarComponent } from "./components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "./components/ui/popover";
 import { CalendarIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { format, isValid } from "date-fns"; // Import isValid for date checking
 import { ja } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn } from "./lib/utils";
 import {
   Table,
   TableBody,
@@ -21,21 +21,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+} from "./components/ui/table";
+import { Checkbox } from "./components/ui/checkbox";
+import { Input } from "./components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+} from "./components/ui/select";
+import { Badge } from "./components/ui/badge";
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableItem } from './components/SortableItem';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { FrontendTimeEntry, DbItems, Preset } from './types';
 

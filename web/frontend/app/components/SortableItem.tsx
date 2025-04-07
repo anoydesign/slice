@@ -1,23 +1,15 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
 import { FrontendTimeEntry } from '../types';
-import { cn } from '@/lib/utils';
+import { cn } from '../lib/utils';
 import { Copy, GripVertical, Trash2 } from 'lucide-react';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "./ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "./ui/popover";
 import { useState } from 'react';
 
 interface SortableItemProps {
@@ -124,26 +116,32 @@ export function SortableItem({
               placeholder="内容を入力"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.content.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.content.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'content', item);
                         togglePopover('content', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -158,26 +156,32 @@ export function SortableItem({
               placeholder="クライアント"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.client.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.client.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'client', item);
                         togglePopover('client', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -192,26 +196,32 @@ export function SortableItem({
               placeholder="目的"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.purpose.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.purpose.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'purpose', item);
                         togglePopover('purpose', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -226,26 +236,32 @@ export function SortableItem({
               placeholder="アクション"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.action.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.action.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'action', item);
                         togglePopover('action', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -260,26 +276,32 @@ export function SortableItem({
               placeholder="誰と"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.with.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.with.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'with', item);
                         togglePopover('with', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -294,26 +316,32 @@ export function SortableItem({
               placeholder="PC/CC"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.pccc.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.pccc.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'pccc', item);
                         togglePopover('pccc', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
@@ -328,26 +356,32 @@ export function SortableItem({
               placeholder="備考"
             />
           </PopoverTrigger>
-          <PopoverContent className="p-0" align="start" side="bottom" sideOffset={4} alignOffset={0} avoidCollisions>
-            <Command>
-              <CommandInput placeholder="検索..." />
-              <CommandList>
-                <CommandEmpty>候補がありません</CommandEmpty>
-                <CommandGroup>
+          <PopoverContent className="w-[220px] p-0 rounded-md border shadow-md" align="start" side="bottom" sideOffset={4} alignOffset={0}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <div className="sticky top-0 bg-background px-3 py-2 text-sm font-medium border-b">
+                候補
+              </div>
+              {dbItems.remark.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  候補がありません
+                </div>
+              ) : (
+                <div className="py-1">
                   {dbItems.remark.map((item) => (
-                    <CommandItem 
+                    <div
                       key={item}
-                      onSelect={() => {
+                      className="relative flex cursor-pointer select-none items-center rounded-sm px-3 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      onClick={() => {
                         onTimeEntryChange(id, 'remark', item);
                         togglePopover('remark', false);
                       }}
                     >
                       {item}
-                    </CommandItem>
+                    </div>
                   ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
       </td>
