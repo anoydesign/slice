@@ -44,6 +44,7 @@ interface FrontendTimeEntry {
   mall: string;
   remark: string;
   selected: boolean;
+  hasError: boolean;
 }
 
 interface DbItems {
@@ -191,36 +192,120 @@ export default function Home() {
     ));
   };
 
-  const handleAddDbItem = () => {
+  const handleAddDbItem = async () => {
     if (!newDbItemValue.trim()) return;
     const newItemValue = newDbItemValue.trim();
-    // Optimistically update UI
-    setDbItems(prev => {
+    setIsLoading(true);
+    try {
+      // バックエンドに保存
+      const response = await fetch(`${API_BASE_URL}/api/db-items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: newDbItemType,
+          value: newItemValue
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('項目の追加に失敗しました');
+      }
+
+      // 成功したらUIを更新
+      setDbItems(prev => {
         const currentItems = prev[newDbItemType] || [];
         if (currentItems.includes(newItemValue)) {
-            return prev;
+          return prev;
         }
         return {
-            ...prev,
-            [newDbItemType]: [...currentItems, newItemValue]
+          ...prev,
+          [newDbItemType]: [...currentItems, newItemValue]
         };
-    });
-    setNewDbItemValue("");
-    console.log(`Adding ${newItemValue} to ${newDbItemType} (API call needed)`);
+      });
+      setNewDbItemValue("");
+    } catch (error) {
+      console.error('項目の追加エラー:', error);
+      setError(error instanceof Error ? error.message : '項目の追加に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteDbItem = (type: keyof DbItems, itemToDelete: string) => {
-    // Optimistically update UI
-    setDbItems(prev => ({
-      ...prev,
-      [type]: (prev[type] || []).filter(item => item !== itemToDelete)
-    }));
-    console.log(`Deleting ${itemToDelete} from ${type} (API call needed)`);
+  const handleDeleteDbItem = async (type: keyof DbItems, itemToDelete: string) => {
+    setIsLoading(true);
+    try {
+      // バックエンドから削除
+      const response = await fetch(`${API_BASE_URL}/api/db-items`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type,
+          value: itemToDelete
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('項目の削除に失敗しました');
+      }
+
+      // 成功したらUIを更新
+      setDbItems(prev => ({
+        ...prev,
+        [type]: (prev[type] || []).filter(item => item !== itemToDelete)
+      }));
+    } catch (error) {
+      console.error('項目の削除エラー:', error);
+      setError(error instanceof Error ? error.message : '項目の削除に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportDbItems = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/db-items?source=spreadsheet`);
+      if (!response.ok) {
+        throw new Error('スプレッドシートからのデータ取得に失敗しました');
+      }
+
+      const data = await response.json();
+      setDbItems(data);
+    } catch (error) {
+      console.error('インポートエラー:', error);
+      setError(error instanceof Error ? error.message : 'インポートに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSave = async () => {
     if (!date) return;
+
+    // バリデーション：内容が空の行があるかチェック
+    const emptyTaskEntries = timeEntries.filter(entry => !entry.task.trim());
+    if (emptyTaskEntries.length > 0) {
+      // エラー状態を設定
+      const emptyTaskIds = emptyTaskEntries.map(entry => entry.id);
+      setTimeEntries(timeEntries.map(entry => ({
+        ...entry,
+        hasError: emptyTaskIds.includes(entry.id)
+      })));
+      setError('内容が入力されていない行があります。');
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
+    // エラー状態をクリア
+    setTimeEntries(timeEntries.map(entry => ({
+      ...entry,
+      hasError: false
+    })));
     try {
       const response = await fetch(`${API_BASE_URL}/api/time-entries/${format(date, 'yyyy-MM-dd')}`, {
         method: 'POST',
@@ -255,14 +340,25 @@ export default function Home() {
   };
 
   const handleAddTimeEntry = () => {
+    let newStartTime = "09:00";
+    let newEndTime = "09:30";
+
+    if (timeEntries.length > 0) {
+      const lastEntry = timeEntries[timeEntries.length - 1];
+      const [lastStartTime, lastEndTime] = lastEntry.time.split(' - ');
+      newStartTime = lastEndTime;
+      newEndTime = getNextTimeSlot(newStartTime);
+    }
+
     const newEntry: FrontendTimeEntry = {
       id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
-      time: '',
+      time: `${newStartTime} - ${newEndTime}`,
       task: '',
       function: '',
       mall: '',
       remark: '',
-      selected: false
+      selected: false,
+      hasError: false
     };
     setTimeEntries([...timeEntries, newEntry]);
   };
@@ -275,7 +371,8 @@ export default function Home() {
       function: preset.function,
       mall: preset.mall,
       remark: preset.remark,
-      selected: false
+      selected: false,
+      hasError: false
     };
     setTimeEntries([...timeEntries, newEntry]);
   };
@@ -300,14 +397,22 @@ export default function Home() {
         throw new Error('昨日のデータがありません');
       }
 
+      // 確認ダイアログを表示
+      const shouldOverwrite = window.confirm('現在のデータを昨日のデータで上書きしますか？');
+      if (!shouldOverwrite) {
+        setIsLoading(false);
+        return;
+      }
+
       // 新しいIDを割り当てて今日のデータとして追加
       const newEntries = yesterdayEntries.map(entry => ({
         ...entry,
         id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
-        selected: false
+        selected: false,
+        hasError: false
       }));
 
-      setTimeEntries([...timeEntries, ...newEntries]);
+      setTimeEntries(newEntries);
     } catch (error) {
       console.error('昨日のデータのインポートエラー:', error);
       setError(error instanceof Error ? error.message : '昨日のデータのインポートに失敗しました');
@@ -340,7 +445,8 @@ export default function Home() {
       const newEntries = lastWeekEntries.map(entry => ({
         ...entry,
         id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
-        selected: false
+        selected: false,
+        hasError: false
       }));
 
       setTimeEntries([...timeEntries, ...newEntries]);
@@ -370,7 +476,8 @@ export default function Home() {
       setTimeEntries(data.map((entry: any) => ({
         ...entry,
         id: entry.id || Math.floor(Math.random() * 1000000),
-        selected: false
+        selected: false,
+        hasError: false
       })));
     } catch (error) {
       console.error('インポートエラー:', error);
@@ -451,10 +558,68 @@ export default function Home() {
     });
   };
 
+  const handleDuplicateTimeEntry = (id: number) => {
+    const entryToDuplicate = timeEntries.find(entry => entry.id === id);
+    if (!entryToDuplicate) return;
+
+    const [startTime, endTime] = entryToDuplicate.time.split(' - ');
+    const newStartTime = endTime;
+    const newEndTime = getNextTimeSlot(newStartTime);
+
+    const newEntry: FrontendTimeEntry = {
+      id: Math.max(...timeEntries.map(e => e.id)) + 1,
+      time: `${newStartTime} - ${newEndTime}`,
+      task: entryToDuplicate.task,
+      function: entryToDuplicate.function,
+      mall: entryToDuplicate.mall,
+      remark: entryToDuplicate.remark,
+      selected: false,
+      hasError: false
+    };
+
+    // 元のエントリの直後に新しいエントリを挿入
+    const index = timeEntries.findIndex(entry => entry.id === id);
+    const newEntries = [...timeEntries];
+    newEntries.splice(index + 1, 0, newEntry);
+
+    // 後続の行の時間を更新
+    let currentTime = newEndTime;
+    for (let i = index + 2; i < newEntries.length; i++) {
+      const nextTime = getNextTimeSlot(currentTime);
+      newEntries[i] = {
+        ...newEntries[i],
+        time: `${currentTime} - ${nextTime}`
+      };
+      currentTime = nextTime;
+    }
+
+    setTimeEntries(newEntries);
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">タイムスライス入力ツール</h1>
-      {error && <p className="text-red-500 mb-4">エラー: {error}</p>}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-red-500"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span className="text-red-600">{error}</span>
+        </div>
+      )}
 
       <Tabs defaultValue="time-input" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -536,6 +701,32 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">タイムスライス入力</h2>
+            <Button
+              variant="outline"
+              onClick={handleAddTimeEntry}
+              className="flex items-center gap-2 hover:bg-gray-50"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-gray-500"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>新しい行を追加</span>
+            </Button>
+          </div>
+
           <div className="mb-4 border rounded-md min-h-[200px] flex flex-col">
             {isLoading ? (
               <div className="flex justify-center items-center flex-grow"><p>読み込み中...</p></div>
@@ -553,13 +744,14 @@ export default function Home() {
                   >
                     <table className="w-full">
                       <thead>
-                        <tr>
-                          <th className="w-1/6">時間</th>
-                          <th className="w-1/4">内容</th>
-                          <th className="w-1/6">機能別</th>
-                          <th className="w-1/6">モール別</th>
-                          <th className="w-1/4">備考</th>
-                          <th className="w-1/12">操作</th>
+                        <tr className="border-b">
+                          <th className="p-2 w-8"></th>
+                          <th className="p-2 text-left">時間</th>
+                          <th className="p-2 text-left">内容</th>
+                          <th className="p-2 text-left">機能</th>
+                          <th className="p-2 text-left">モール</th>
+                          <th className="p-2 text-left">備考</th>
+                          <th className="p-2 w-24 text-right">操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -575,6 +767,7 @@ export default function Home() {
                               onTimeEntryChange={handleTimeEntryChange}
                               onDeleteTimeEntry={handleDeleteTimeEntry}
                               onUpdateTime={handleUpdateTime}
+                              onDuplicateTimeEntry={handleDuplicateTimeEntry}
                             />
                           ))}
                         </SortableContext>
@@ -615,9 +808,14 @@ export default function Home() {
         <TabsContent value="database">
           <h2 className="text-xl font-bold mb-4 mt-4">業務データベース管理</h2>
           <p className="mb-4">よく使う項目を登録・削除できます。変更は自動で保存されます。</p>
-          {/* TODO: Implement DB Import */} 
           <div className="flex justify-end mb-4">
-              <Button variant="secondary">スプレッドシートからインポート</Button>
+            <Button 
+              variant="secondary" 
+              onClick={handleImportDbItems}
+              disabled={isLoading}
+            >
+              スプレッドシートからインポート
+            </Button>
           </div>
 
           {/* DB Add Form */} 
