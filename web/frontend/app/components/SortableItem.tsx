@@ -13,12 +13,12 @@ import {
 import { useState } from 'react';
 
 interface SortableItemProps {
-  id: number;
+  id: string;
   entry: FrontendTimeEntry;
-  onTimeEntryChange: (id: number, field: string, value: string) => void;
-  onDeleteTimeEntry: (id: number) => void;
-  onUpdateTime: (id: number, startTime: string, endTime: string) => void;
-  onDuplicateTimeEntry: (id: number) => void;
+  onTimeEntryChange: (id: string, field: string, value: string) => void;
+  onDeleteTimeEntry: (id: string) => void;
+  onUpdateTime: (id: string, startTime: string, endTime: string) => void;
+  onDuplicateTimeEntry: (id: string) => void;
   dbItems: {
     content: string[];
     client: string[];

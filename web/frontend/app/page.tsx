@@ -1,6 +1,6 @@
 "use client"; // Make this a client component
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "./components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Calendar as CalendarComponent } from "./components/ui/calendar";
@@ -10,7 +10,7 @@ import {
   PopoverTrigger,
 } from "./components/ui/popover";
 import { CalendarIcon, Cross2Icon } from "@radix-ui/react-icons";
-import { format, isValid } from "date-fns"; // Import isValid for date checking
+import { format, isValid, parseISO, subDays } from "date-fns"; // Import isValid for date checking
 import { ja } from "date-fns/locale";
 import { cn } from "./lib/utils";
 import {
@@ -32,15 +32,30 @@ import {
   SelectValue,
 } from "./components/ui/select";
 import { Badge } from "./components/ui/badge";
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableItem } from './components/SortableItem';
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { FrontendTimeEntry, DbItems, Preset } from './types';
+import { nanoid } from 'nanoid';
 
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
+
+// Backend time entry type
+interface BackendTimeEntry {
+  id?: string;
+  time: string;
+  content: string;
+  client: string;
+  purpose: string;
+  action: string;
+  with: string;
+  pccc: string;
+  remark: string;
+}
 
 // デフォルトのプリセット
 const DEFAULT_PRESETS: Preset[] = [
@@ -84,6 +99,7 @@ const DEFAULT_PRESETS: Preset[] = [
 
 export default function Home() {
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [startWorkTime, setStartWorkTime] = useState<string>("09:00"); // 業務開始時間
   // Initialize states with empty data
   const [timeEntries, setTimeEntries] = useState<FrontendTimeEntry[]>([]);
   const [dbItems, setDbItems] = useState<DbItems>({ content: [], client: [], purpose: [], action: [], with: [], pccc: [], remark: [] });
@@ -102,35 +118,77 @@ export default function Home() {
   );
 
   // Function to fetch time entries for a given date
-  const fetchTimeEntries = async (date: string) => {
+  const fetchTimeEntries = async () => {
+    // Set loading state
+    setIsLoading(true);
+    // Reset error state
     setError(null);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/time-entries/${date}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'データの取得に失敗しました');
+      if (!date) {
+        throw new Error("日付が選択されていません。");
       }
+
+      // Format the date to 'YYYY-MM-DD' to send to the API
+      const formattedDate = format(date, "yyyy-MM-dd");
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedDate}`);
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+
       const data = await response.json();
       
-      // データを新しい形式に変換
-      const transformedData = data.map((item: any) => ({
-        id: item.id || 0,
-        time: item.time || '',
-        content: item.content || '',
-        client: item.client || '',
-        purpose: item.purpose || '',
-        action: item.action || '',
-        with: item.with || '',
-        pccc: item.pccc || '',
-        remark: item.remark || '',
-        selected: false,
-        hasError: false,
-      }));
-      
+      // Transform the data to match our frontend model
+      let transformedData: FrontendTimeEntry[] = data.map((entry: BackendTimeEntry, index: number) => {
+        return {
+          id: nanoid(),
+          time: entry.time,
+          content: entry.content,
+          client: entry.client,
+          purpose: entry.purpose,
+          action: entry.action,
+          with: entry.with,
+          pccc: entry.pccc,
+          remark: entry.remark,
+          selected: false,
+          hasError: false
+        };
+      });
+
+      if (transformedData.length === 0) {
+        // データがない場合、業務開始時間から最初のエントリを作成
+        const firstEndTime = getNextTimeSlot(startWorkTime);
+        transformedData = [{
+          id: nanoid(),
+          time: `${startWorkTime} - ${firstEndTime}`,
+          content: "",
+          client: "",
+          purpose: "",
+          action: "",
+          with: "",
+          pccc: "",
+          remark: "",
+          selected: false,
+          hasError: false
+        }];
+      } else {
+        // 既存のデータがある場合、業務開始時間と実際の開始時間が異なれば調整
+        const firstTimeSlot = transformedData[0]?.time || "";
+        const currentFirstStartTime = firstTimeSlot.split(" - ")[0];
+        
+        if (currentFirstStartTime !== startWorkTime && transformedData.length > 0) {
+          recalculateTimeEntries(startWorkTime);
+        }
+      }
+
       setTimeEntries(transformedData);
-    } catch (err: any) {
-      console.error('Failed to fetch time entries:', err);
-      setError(err.message || 'データの取得に失敗しました');
+      setLastUpdated("最後の更新: " + format(new Date(), "HH:mm:ss"));
+    } catch (error) {
+      setError(`データの取得中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -273,7 +331,7 @@ export default function Home() {
 
         // タイムエントリを取得
         if (date && isValid(date)) {
-          await fetchTimeEntries(format(date, "yyyy-MM-dd"));
+          await fetchTimeEntries();
         }
       } catch (err: any) {
         console.error("Failed to fetch initial data:", err);
@@ -291,11 +349,11 @@ export default function Home() {
   // Fetch time entries when date changes
   useEffect(() => {
     if (date && isValid(date)) {
-      fetchTimeEntries(format(date, "yyyy-MM-dd"));
+      fetchTimeEntries();
     }
   }, [date]); // Re-fetch when date changes
 
-  const handleSelectRow = (id: number, checked: boolean) => {
+  const handleSelectRow = (id: string, checked: boolean) => {
     setTimeEntries(timeEntries.map(entry =>
       entry.id === id ? { ...entry, selected: checked } : entry
     ));
@@ -455,18 +513,19 @@ export default function Home() {
     }
   };
 
-  // Update a specific field in a time entry
-  const handleTimeEntryChange = (id: number, field: string, value: string) => {
-    // Ensure the field is a valid key of FrontendTimeEntry (excluding id, selected, hasError)
-    const validFields: (keyof Omit<FrontendTimeEntry, 'id' | 'selected' | 'hasError'>)[] = [
-        'time', 'content', 'client', 'purpose', 'action', 'with', 'pccc', 'remark'
-    ];
+  // 業務開始時間が変更された時のハンドラー
+  const handleStartTimeChange = (value: string) => {
+    setStartWorkTime(value);
+  };
+  
+  // セットボタンが押されたときの処理
+  const handleSetStartTime = () => {
+    recalculateTimeEntries(startWorkTime);
+  };
 
-    if (!(validFields as string[]).includes(field)) {
-        console.error(`無効なフィールドです: ${field}`);
-        return;
-    }
-
+  // タイムエントリの値を変更する関数
+  const handleTimeEntryChange = (id: string, field: string, value: string) => {
+    // Save changes to the state
     setTimeEntries(prevEntries =>
       prevEntries.map(entry =>
         entry.id === id ? { ...entry, [field as keyof FrontendTimeEntry]: value } : entry
@@ -474,24 +533,25 @@ export default function Home() {
     );
   };
 
-  const handleDeleteTimeEntry = (id: number) => {
+  // タイムエントリを削除する関数
+  const handleDeleteTimeEntry = (id: string) => {
     setTimeEntries(prevEntries => {
       // 削除する行のインデックスを見つける
       const index = prevEntries.findIndex(entry => entry.id === id);
       if (index === -1) return prevEntries;
       
       // 削除する行の時間情報を取得
-      const deletedEntry = prevEntries[index];
-      const [startTime, endTime] = deletedEntry.time.split(' - ');
+      const timeParts = prevEntries[index].time.split(' - ');
+      const startTimeToRemove = timeParts[0];
+      const endTimeToRemove = timeParts[1];
       
       // 行を削除
       const newEntries = prevEntries.filter(entry => entry.id !== id);
       
       // 後続の行の時間を更新
       if (index < newEntries.length) {
-        let currentTime = startTime;
-        
-        // 削除した行以降の行の時間を更新
+        // 削除された行の次の行から処理を開始
+        let currentTime = startTimeToRemove;
         for (let i = index; i < newEntries.length; i++) {
           const nextTime = getNextTimeSlot(currentTime);
           newEntries[i] = {
@@ -507,35 +567,44 @@ export default function Home() {
   };
 
   const handleAddTimeEntry = () => {
-    let newStartTime = "09:00";
-    let newEndTime = "09:30";
-
-    if (timeEntries.length > 0) {
-      const lastEntry = timeEntries[timeEntries.length - 1];
-      const [lastStartTime, lastEndTime] = lastEntry.time.split(' - ');
-      newStartTime = lastEndTime;
-      newEndTime = getNextTimeSlot(newStartTime);
+    // 最後のエントリーを取得
+    const lastEntry = timeEntries[timeEntries.length - 1];
+    
+    // 時間帯を計算
+    let newTime = "";
+    if (timeEntries.length === 0) {
+      // エントリーがない場合は、業務開始時間から始める
+      const endTime = getNextTimeSlot(startWorkTime);
+      newTime = `${startWorkTime} - ${endTime}`;
+    } else {
+      // 最後のエントリーの終了時間から始める
+      const lastTimeSlots = lastEntry.time.split(" - ");
+      const startTime = lastTimeSlots[1];
+      const endTime = getNextTimeSlot(startTime);
+      newTime = `${startTime} - ${endTime}`;
     }
 
+    // 新しいエントリーを作成して追加
     const newEntry: FrontendTimeEntry = {
-      id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
-      time: `${newStartTime} - ${newEndTime}`,
-      content: '',
-      client: '',
-      purpose: '',
-      action: '',
-      with: '',
-      pccc: '',
-      remark: '',
+      id: nanoid(),
+      time: newTime,
+      content: "",
+      client: "",
+      purpose: "",
+      action: "",
+      with: "",
+      pccc: "",
+      remark: "",
       selected: false,
       hasError: false
     };
+
     setTimeEntries([...timeEntries, newEntry]);
   };
 
   const handleAddPreset = (preset: Preset) => {
     const newEntry: FrontendTimeEntry = {
-      id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+      id: nanoid(),
       time: preset.time,
       content: preset.content,
       client: preset.client,
@@ -547,87 +616,52 @@ export default function Home() {
       selected: false,
       hasError: false
     };
+
     setTimeEntries([...timeEntries, newEntry]);
   };
 
-  const handleImportYesterday = async () => {
-    if (!date) return;
-    setIsLoading(true);
-    try {
-      // 昨日の日付を計算
-      const yesterday = new Date(date);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const formattedYesterday = format(yesterday, 'yyyy-MM-dd');
-
-      // 昨日のデータを取得
-      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedYesterday}`);
-      if (!response.ok) {
-        throw new Error('昨日のデータの取得に失敗しました');
-      }
-
-      const yesterdayEntries: FrontendTimeEntry[] = await response.json();
-      if (yesterdayEntries.length === 0) {
-        throw new Error('昨日のデータがありません');
-      }
-
-      // 確認ダイアログを表示
-      const shouldOverwrite = window.confirm('現在のデータを昨日のデータで上書きしますか？');
-      if (!shouldOverwrite) {
-        setIsLoading(false);
-        return;
-      }
-
-      // 新しいIDを割り当てて今日のデータとして追加
-      const newEntries = yesterdayEntries.map(entry => ({
-        ...entry,
-        id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
-        selected: false,
-        hasError: false
-      }));
-
-      setTimeEntries(newEntries);
-    } catch (error) {
-      console.error('昨日のデータのインポートエラー:', error);
-      setError(error instanceof Error ? error.message : '昨日のデータのインポートに失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleImportLastWeek = async () => {
-    if (!date) return;
-    setIsLoading(true);
     try {
-      // 先週の日付を計算
+      if (!date) return;
+      
+      // 1週間前の日付を計算
       const lastWeek = new Date(date);
       lastWeek.setDate(lastWeek.getDate() - 7);
       const formattedLastWeek = format(lastWeek, 'yyyy-MM-dd');
-
+      
       // 先週のデータを取得
       const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedLastWeek}`);
       if (!response.ok) {
         throw new Error('先週のデータの取得に失敗しました');
       }
-
-      const lastWeekEntries: FrontendTimeEntry[] = await response.json();
+      
+      const lastWeekEntries: BackendTimeEntry[] = await response.json();
       if (lastWeekEntries.length === 0) {
-        throw new Error('先週のデータがありません');
+        showTemporaryMessage('先週のデータがありません', 'error');
+        return;
       }
-
+      
+      // 確認ダイアログを表示
+      const shouldAppend = window.confirm('先週のデータを現在のデータに追加しますか？（キャンセルを選ぶと上書きします）');
+      
       // 新しいIDを割り当てて今日のデータとして追加
-      const newEntries = lastWeekEntries.map(entry => ({
+      const newEntries: FrontendTimeEntry[] = lastWeekEntries.map(entry => ({
         ...entry,
-        id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+        id: nanoid(),
         selected: false,
         hasError: false
       }));
-
-      setTimeEntries([...timeEntries, ...newEntries]);
+      
+      if (shouldAppend) {
+        setTimeEntries([...timeEntries, ...newEntries]);
+      } else {
+        setTimeEntries(newEntries);
+      }
+      
+      showTemporaryMessage('先週のデータをインポートしました', 'success');
     } catch (error) {
       console.error('先週のデータのインポートエラー:', error);
-      setError(error instanceof Error ? error.message : '先週のデータのインポートに失敗しました');
-    } finally {
-      setIsLoading(false);
+      showTemporaryMessage('先週のデータのインポートに失敗しました', 'error');
     }
   };
 
@@ -660,41 +694,40 @@ export default function Home() {
     }
   };
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (active.id !== over?.id) {
       setTimeEntries((items) => {
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over?.id);
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+        
+        // 項目の順序を変更
         const newItems = arrayMove(items, oldIndex, newIndex);
         
-        // 新しい位置の前後の行の時間を取得
-        let prevTime = newIndex > 0 ? newItems[newIndex - 1].time.split(' - ')[1] : newItems[newIndex].time.split(' - ')[0];
-        let nextTime = newIndex < newItems.length - 1 ? newItems[newIndex + 1].time.split(' - ')[0] : getNextTimeSlot(prevTime);
+        // タイムスロットを再計算（1行目は業務開始時間から、以降は前の行の終了時間から）
+        const updatedItems = [...newItems];
         
-        // 同じ時間にならないように調整
-        if (prevTime === nextTime) {
-          nextTime = getNextTimeSlot(prevTime);
-        }
-        
-        // ドラッグされた行の時間を更新
-        newItems[newIndex] = {
-          ...newItems[newIndex],
-          time: `${prevTime} - ${nextTime}`
-        };
-        
-        // 後続の行の時間を更新
-        let currentTime = nextTime;
-        for (let i = newIndex + 1; i < newItems.length; i++) {
-          const nextTime = getNextTimeSlot(currentTime);
-          newItems[i] = {
-            ...newItems[i],
-            time: `${currentTime} - ${nextTime}`
+        // 最初のエントリーの時間を業務開始時間をもとに設定
+        if (updatedItems.length > 0) {
+          const firstEndTime = getNextTimeSlot(startWorkTime);
+          updatedItems[0] = {
+            ...updatedItems[0],
+            time: `${startWorkTime} - ${firstEndTime}`
           };
-          currentTime = nextTime;
+          
+          // 後続のエントリーの時間を順番に更新
+          let currentTime = firstEndTime;
+          for (let i = 1; i < updatedItems.length; i++) {
+            const nextTime = getNextTimeSlot(currentTime);
+            updatedItems[i] = {
+              ...updatedItems[i],
+              time: `${currentTime} - ${nextTime}`
+            };
+            currentTime = nextTime;
+          }
         }
         
-        return newItems;
+        return updatedItems;
       });
     }
   };
@@ -720,7 +753,8 @@ export default function Home() {
     return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`;
   };
 
-  const handleUpdateTime = (id: number, startTime: string, endTime: string) => {
+  // 時間帯を更新する関数
+  const handleUpdateTime = (id: string, startTime: string, endTime: string) => {
     setTimeEntries((items) => {
       const index = items.findIndex((item) => item.id === id);
       if (index === -1) return items;
@@ -746,16 +780,23 @@ export default function Home() {
     });
   };
 
-  const handleDuplicateTimeEntry = (id: number) => {
+  // エントリを複製する関数
+  const handleDuplicateTimeEntry = (id: string) => {
     const entryToDuplicate = timeEntries.find(entry => entry.id === id);
     if (!entryToDuplicate) return;
 
-    const [startTime, endTime] = entryToDuplicate.time.split(' - ');
+    // 複製元のエントリーの位置を特定
+    const index = timeEntries.findIndex(entry => entry.id === id);
+    
+    // 複製元の時間帯を取得
+    const [startTime, endTime] = entryToDuplicate.time.split(" - ");
+    
+    // 複製元の直後の時間帯を計算
     const newStartTime = endTime;
     const newEndTime = getNextTimeSlot(newStartTime);
 
     const newEntry: FrontendTimeEntry = {
-      id: Math.max(...timeEntries.map(e => e.id)) + 1,
+      id: nanoid(),
       time: `${newStartTime} - ${newEndTime}`,
       content: entryToDuplicate.content,
       client: entryToDuplicate.client,
@@ -769,30 +810,210 @@ export default function Home() {
     };
 
     // 元のエントリの直後に新しいエントリを挿入
-    const index = timeEntries.findIndex(entry => entry.id === id);
     const newEntries = [...timeEntries];
     newEntries.splice(index + 1, 0, newEntry);
-
-    // 後続の行の時間を更新
-    let currentTime = newEndTime;
-    for (let i = index + 2; i < newEntries.length; i++) {
-      const nextTime = getNextTimeSlot(currentTime);
-      newEntries[i] = {
-        ...newEntries[i],
-        time: `${currentTime} - ${nextTime}`
-      };
-      currentTime = nextTime;
+    
+    // 後続のエントリーの時間を更新
+    if (index < timeEntries.length - 1) {
+      let currentTime = newEndTime;
+      for (let i = index + 2; i < newEntries.length; i++) {
+        const nextTime = getNextTimeSlot(currentTime);
+        newEntries[i] = {
+          ...newEntries[i],
+          time: `${currentTime} - ${nextTime}`
+        };
+        currentTime = nextTime;
+      }
     }
 
     setTimeEntries(newEntries);
   };
 
-  const showTemporaryMessage = (message: string, type: 'success' | 'error') => {
-    setError(type === 'error' ? message : null);
-    // 3秒後にメッセージをクリア
+  // 一時的なメッセージを表示する関数
+  const showTemporaryMessage = (message: string, type: 'success' | 'error' = 'success') => {
+    setLastUpdated(message);
     setTimeout(() => {
-      setError(null);
+      setLastUpdated("最後の更新: " + format(new Date(), "HH:mm:ss"));
     }, 3000);
+  };
+
+  // 業務開始時間が変更されたときに timeEntries を再計算する関数
+  const recalculateTimeEntries = (newStartTime: string) => {
+    if (timeEntries.length === 0) return;
+
+    setTimeEntries(prevEntries => {
+      // 新しいエントリー配列を作成
+      const newEntries = [...prevEntries];
+      
+      // 最初のエントリーの時間を新しい開始時間に設定
+      const firstEndTime = getNextTimeSlot(newStartTime);
+      newEntries[0] = {
+        ...newEntries[0],
+        time: `${newStartTime} - ${firstEndTime}`
+      };
+      
+      // 後続のエントリーの時間を順番に更新
+      let currentTime = firstEndTime;
+      for (let i = 1; i < newEntries.length; i++) {
+        const nextTime = getNextTimeSlot(currentTime);
+        newEntries[i] = {
+          ...newEntries[i],
+          time: `${currentTime} - ${nextTime}`
+        };
+        currentTime = nextTime;
+      }
+      
+      return newEntries;
+    });
+  };
+
+  // 選択したエントリーの削除
+  const handleDeleteSelected = () => {
+    // Filter out selected entries
+    const newEntries = timeEntries.filter(entry => !entry.selected);
+    setTimeEntries(newEntries);
+  };
+
+  // エントリーの選択状態の切り替え
+  const toggleSelect = (id: string) => {
+    setTimeEntries(prevEntries => {
+      return prevEntries.map(entry => {
+        if (entry.id === id) {
+          return { ...entry, selected: !entry.selected };
+        }
+        return entry;
+      });
+    });
+  };
+
+  // 全てのエントリーの選択状態を設定
+  const selectAll = (selected: boolean) => {
+    setTimeEntries(prevEntries => {
+      return prevEntries.map(entry => ({ ...entry, selected }));
+    });
+  };
+
+  // エントリーの複製
+  const handleDuplicate = (id: string) => {
+    const entryToDuplicate = timeEntries.find(entry => entry.id === id);
+    if (!entryToDuplicate) return;
+
+    // 最後のエントリーの時間帯を取得
+    const lastEntry = timeEntries[timeEntries.length - 1];
+    const lastTimeParts = lastEntry.time.split(' - ');
+    const lastEndTime = lastTimeParts[1];
+    
+    // 新しい時間帯を計算
+    const newStartTime = lastEndTime;
+    const newEndTime = getNextTimeSlot(newStartTime);
+
+    // 新しいエントリーを作成
+    const newEntry: FrontendTimeEntry = {
+      ...entryToDuplicate,
+      id: nanoid(),
+      time: `${newStartTime} - ${newEndTime}`,
+      selected: false
+    };
+
+    // 新しいエントリーを追加
+    setTimeEntries([...timeEntries, newEntry]);
+  };
+
+  // スプレッドシートからデータをインポート
+  const importFromSheet = async () => {
+    try {
+      if (!date) return;
+      
+      const formattedDate = format(date, "yyyy-MM-dd");
+      // バックエンドには/api/import-sheet/エンドポイントがないので、
+      // 代わりにスプレッドシートからのデータを特別なパラメータで取得
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedDate}`);
+      
+      if (!response.ok) {
+        throw new Error("スプレッドシートからのデータインポートに失敗しました。");
+      }
+      
+      const data = await response.json();
+      
+      if (!data || data.length === 0) {
+        showTemporaryMessage("インポートするデータがありませんでした。", "error");
+        return;
+      }
+      
+      // スプレッドシートのデータでタイムエントリを更新
+      setTimeEntries(data.map((entry: BackendTimeEntry) => ({
+        ...entry,
+        id: entry.id || nanoid(),
+        selected: false,
+        hasError: false
+      })));
+      
+      // 時間帯を業務開始時間から再計算
+      recalculateTimeEntries(startWorkTime);
+      
+      showTemporaryMessage("スプレッドシートからデータをインポートしました。", "success");
+      
+    } catch (error) {
+      console.error("スプレッドシートからのインポートに失敗しました:", error);
+      showTemporaryMessage("エラー: スプレッドシートからのインポートに失敗しました。", "error");
+    }
+  };
+
+  // 前日のデータをインポート
+  const importPreviousDay = async () => {
+    try {
+      if (!date) return;
+      
+      // 前日の日付を計算
+      const previousDay = subDays(date, 1);
+      const formattedPreviousDay = format(previousDay, "yyyy-MM-dd");
+      
+      // 前日のデータを取得
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedPreviousDay}`);
+      
+      if (!response.ok) {
+        throw new Error("前日のデータを取得できませんでした。");
+      }
+      
+      const data = await response.json();
+      
+      if (!data || data.length === 0) {
+        showTemporaryMessage("前日のデータがありません。", "error");
+        return;
+      }
+      
+      // 前日のデータを新しいIDで追加
+      const newEntries: FrontendTimeEntry[] = data.map((entry: BackendTimeEntry) => ({
+        ...entry,
+        id: nanoid(),
+        selected: false,
+        hasError: false
+      }));
+      
+      // 業務開始時間に合わせて時間を再計算
+      const firstEndTime = getNextTimeSlot(startWorkTime);
+      newEntries[0] = {
+        ...newEntries[0],
+        time: `${startWorkTime} - ${firstEndTime}`
+      };
+      
+      let currentTime = firstEndTime;
+      for (let i = 1; i < newEntries.length; i++) {
+        const nextTime = getNextTimeSlot(currentTime);
+        newEntries[i] = {
+          ...newEntries[i],
+          time: `${currentTime} - ${nextTime}`
+        };
+        currentTime = nextTime;
+      }
+      
+      setTimeEntries(newEntries);
+      showTemporaryMessage("前日のデータをインポートしました。", "success");
+      
+    } catch (error) {
+      console.error("前日のデータのインポートに失敗しました:", error);
+      showTemporaryMessage("エラー: 前日のデータのインポートに失敗しました。", "error");
+    }
   };
 
   return (
@@ -829,55 +1050,77 @@ export default function Home() {
         {/* Time Input Tab */}
         <TabsContent value="time-input">
           <div className="flex justify-between items-center mb-4 mt-4">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-[240px] justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {/* Ensure date is valid before formatting */} 
-                  {date && isValid(date) ? format(date, "PPP") : <span>日付を選択</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate} // Let the useEffect handle fetching
-                  initialFocus
-                  disabled={isLoading} // Disable calendar while loading
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex items-center space-x-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[280px] justify-start text-left font-normal",
+                      !date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date ? format(date, "yyyy年MM月dd日 EEEE", { locale: ja }) : <span>日付を選択</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <CalendarComponent
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
 
-            <div className="space-x-2">
-              <Button 
-                variant="secondary" 
-                onClick={handleImportFromSpreadsheet}
-                disabled={isLoading}
-              >
-                インポート
+              <div className="flex items-center space-x-2">
+                <label htmlFor="startWorkTime" className="text-sm font-medium">
+                  業務開始時間:
+                </label>
+                <Select value={startWorkTime} onValueChange={handleStartTimeChange}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue placeholder="時間選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="09:00">09:00</SelectItem>
+                    <SelectItem value="09:30">09:30</SelectItem>
+                    <SelectItem value="10:00">10:00</SelectItem>
+                    <SelectItem value="10:30">10:30</SelectItem>
+                    <SelectItem value="11:00">11:00</SelectItem>
+                    <SelectItem value="11:30">11:30</SelectItem>
+                    <SelectItem value="12:00">12:00</SelectItem>
+                    <SelectItem value="12:30">12:30</SelectItem>
+                    <SelectItem value="13:00">13:00</SelectItem>
+                    <SelectItem value="13:30">13:30</SelectItem>
+                    <SelectItem value="14:00">14:00</SelectItem>
+                    <SelectItem value="14:30">14:30</SelectItem>
+                    <SelectItem value="15:00">15:00</SelectItem>
+                    <SelectItem value="15:30">15:30</SelectItem>
+                    <SelectItem value="16:00">16:00</SelectItem>
+                    <SelectItem value="16:30">16:30</SelectItem>
+                    <SelectItem value="17:00">17:00</SelectItem>
+                    <SelectItem value="17:30">17:30</SelectItem>
+                    <SelectItem value="18:00">18:00</SelectItem>
+                    <SelectItem value="18:30">18:30</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSetStartTime}
+                >
+                  セット
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex space-x-2">
+              <Button onClick={importFromSheet} variant="outline" size="sm">
+                スプレッドシートからインポート
               </Button>
-              <Button 
-                variant="secondary" 
-                onClick={handleImportYesterday}
-                disabled={isLoading}
-              >
-                昨日と同じ
-              </Button>
-              <Button 
-                variant="secondary" 
-                onClick={handleImportLastWeek}
-                disabled={isLoading}
-              >
-                先週と同じ
-              </Button>
-              <Button onClick={handleSave} disabled={isLoading}>
-                {isLoading ? '保存中...' : '保存する'}
+              <Button onClick={importPreviousDay} variant="outline" size="sm">
+                前日のデータをインポート
               </Button>
             </div>
           </div>
@@ -936,15 +1179,16 @@ export default function Home() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <DndContext
+                  <DndContext 
                     sensors={sensors}
                     collisionDetection={closestCenter}
                     onDragEnd={handleDragEnd}
+                    modifiers={[restrictToVerticalAxis]}
                   >
                     <Table>
                       <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="w-10"></TableHead>
+                        <TableRow>
+                          <TableHead className="w-10">&nbsp;</TableHead>
                           <TableHead className="w-48">時間</TableHead>
                           <TableHead>内容</TableHead>
                           <TableHead>クライアント</TableHead>
@@ -953,11 +1197,14 @@ export default function Home() {
                           <TableHead>誰と</TableHead>
                           <TableHead>PC/CC</TableHead>
                           <TableHead>備考</TableHead>
-                          <TableHead className="w-24"></TableHead>
+                          <TableHead className="w-20">操作</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <SortableContext items={timeEntries.map(entry => entry.id)} strategy={verticalListSortingStrategy}>
+                        <SortableContext 
+                          items={timeEntries.map(e => e.id)} 
+                          strategy={verticalListSortingStrategy}
+                        >
                           {timeEntries.map((entry) => (
                             <SortableItem
                               key={entry.id}
