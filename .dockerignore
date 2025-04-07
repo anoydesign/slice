@@ -1,0 +1,9 @@
+.git
+.gitignore
+README.md
+*.db
+*.sqlite
+*.sqlite3
+credentials.json
+.env
+.DS_Store 
