@@ -4,7 +4,7 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { FrontendTimeEntry } from '../types';
 import { cn } from '../lib/utils';
-import { Copy, GripVertical, Trash2 } from 'lucide-react';
+import { Copy, GripVertical, Trash2, AlertCircle } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -91,7 +91,7 @@ export function SortableItem({
       )}
     >
       <td className="p-2 w-10" {...attributes} {...listeners}>
-        <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors">
+        <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex justify-center">
           <GripVertical className="h-4 w-4" />
         </div>
       </td>
@@ -100,6 +100,9 @@ export function SortableItem({
           <span className="font-medium">{startTime}</span>
           <span className="text-muted-foreground">-</span>
           <span className="font-medium">{endTime}</span>
+          {entry.hasError && (
+            <AlertCircle className="h-4 w-4 text-destructive ml-1" />
+          )}
         </div>
       </td>
       <td className="p-2">
@@ -391,7 +394,7 @@ export function SortableItem({
             variant="ghost"
             size="icon"
             onClick={() => onDuplicateTimeEntry(id)}
-            className="h-8 w-8"
+            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
           >
             <Copy className="h-4 w-4" />
           </Button>
@@ -399,7 +402,7 @@ export function SortableItem({
             variant="ghost"
             size="icon"
             onClick={() => onDeleteTimeEntry(id)}
-            className="h-8 w-8 text-destructive hover:text-destructive"
+            className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-colors"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

@@ -41,8 +41,12 @@ import { AlertCircle } from "lucide-react";
 import { FrontendTimeEntry, DbItems, Preset } from './types';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
-import { Label } from "./components/ui/label";
-import { Textarea } from "./components/ui/textarea";
+import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
+import { useMediaQuery } from 'react-responsive';
+import { MobileTimeEntryList } from './components/MobileTimeEntryList';
+import { DatePicker } from '@/app/components/DatePicker';
+import { Calendar, ArrowLeftRight, Database, Clock, RefreshCw, Save, Plus, Sheet, Undo } from 'lucide-react';
 
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
@@ -1171,6 +1175,33 @@ export default function Home() {
     }
   };
 
+  // Responsive design helpers
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+
+  // Handle reordering time entries
+  const handleReorderTimeEntries = (activeId: string, overId: string) => {
+    setTimeEntries((items) => {
+      const oldIndex = items.findIndex(item => item.id === activeId);
+      const newIndex = items.findIndex(item => item.id === overId);
+      
+      const newArray = [...items];
+      const [removed] = newArray.splice(oldIndex, 1);
+      newArray.splice(newIndex, 0, removed);
+      
+      // Recalculate times after reordering
+      let currentTime = startWorkTime;
+      return newArray.map((item, index) => {
+        const nextTime = getNextTimeSlot(currentTime);
+        const updatedItem = {
+          ...item,
+          time: `${currentTime} - ${nextTime}`
+        };
+        currentTime = nextTime;
+        return updatedItem;
+      });
+    });
+  };
+
   return (
     <div className="container mx-auto p-4 relative">
       {/* LoadingOverlayコンポーネントは削除 */}
@@ -1199,197 +1230,180 @@ export default function Home() {
         </div>
       )}
 
-      <Tabs defaultValue="time-input" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="time-input">タイム入力</TabsTrigger>
-          <TabsTrigger value="database">業務データベース</TabsTrigger>
+      <Tabs defaultValue="time-entries" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="time-entries" className="flex items-center gap-1.5">
+            <Clock className="h-4 w-4" />
+            <span>タイムエントリー</span>
+          </TabsTrigger>
+          <TabsTrigger value="database" className="flex items-center gap-1.5">
+            <Database className="h-4 w-4" />
+            <span>データベース</span>
+          </TabsTrigger>
         </TabsList>
 
-        {/* Time Input Tab */}
-        <TabsContent value="time-input">
-          <div className="flex justify-between items-center mb-4 mt-4">
-            <div className="flex items-center space-x-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-[280px] justify-start text-left font-normal",
-                      !date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, "yyyy年MM月dd日 EEEE", { locale: ja }) : <span>日付を選択</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <CalendarComponent
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    initialFocus
+        {/* Time Entries Tab */}
+        <TabsContent value="time-entries">
+          <div className="mb-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+              <div className="flex flex-wrap gap-2 items-center">
+                <DatePicker
+                  selected={date}
+                  onChange={(date: Date) => setDate(date)}
+                  dateFormat="yyyy-MM-dd"
+                  className="w-full sm:w-auto px-3 py-2 border rounded"
+                />
+                <div className="flex items-center">
+                  <Label htmlFor="startWorkTime" className="mr-2 whitespace-nowrap flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    業務開始時間:
+                  </Label>
+                  <Input
+                    id="startWorkTime"
+                    type="text"
+                    value={startWorkTime}
+                    onChange={(e) => {
+                      setStartWorkTime(e.target.value);
+                      recalculateTimeEntries(e.target.value);
+                    }}
+                    className="w-24 px-2 py-1 text-center"
                   />
-                </PopoverContent>
-              </Popover>
-
-              <div className="flex items-center space-x-2">
-                <label htmlFor="startWorkTime" className="text-sm font-medium">
-                  業務開始時間:
-                </label>
-                <Select value={startWorkTime} onValueChange={handleStartTimeChange}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue placeholder="時間選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="09:00">09:00</SelectItem>
-                    <SelectItem value="09:30">09:30</SelectItem>
-                    <SelectItem value="10:00">10:00</SelectItem>
-                    <SelectItem value="10:30">10:30</SelectItem>
-                    <SelectItem value="11:00">11:00</SelectItem>
-                    <SelectItem value="11:30">11:30</SelectItem>
-                    <SelectItem value="12:00">12:00</SelectItem>
-                    <SelectItem value="12:30">12:30</SelectItem>
-                    <SelectItem value="13:00">13:00</SelectItem>
-                    <SelectItem value="13:30">13:30</SelectItem>
-                    <SelectItem value="14:00">14:00</SelectItem>
-                    <SelectItem value="14:30">14:30</SelectItem>
-                    <SelectItem value="15:00">15:00</SelectItem>
-                    <SelectItem value="15:30">15:30</SelectItem>
-                    <SelectItem value="16:00">16:00</SelectItem>
-                    <SelectItem value="16:30">16:30</SelectItem>
-                    <SelectItem value="17:00">17:00</SelectItem>
-                    <SelectItem value="17:30">17:30</SelectItem>
-                    <SelectItem value="18:00">18:00</SelectItem>
-                    <SelectItem value="18:30">18:30</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleSetStartTime}
-                >
-                  セット
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={importFromSheet} variant="outline" size="sm" className="flex items-center gap-1.5">
+                  <Sheet className="h-4 w-4" />
+                  <span>スプレッドシートからインポート</span>
+                </Button>
+                <Button onClick={importPreviousDay} variant="outline" size="sm" className="flex items-center gap-1.5">
+                  <Undo className="h-4 w-4" />
+                  <span>前日のデータをインポート</span>
                 </Button>
               </div>
             </div>
 
-            <div className="flex space-x-2">
-              <Button onClick={importFromSheet} variant="outline" size="sm">
-                スプレッドシートからインポート
-              </Button>
-              <Button onClick={importPreviousDay} variant="outline" size="sm">
-                前日のデータをインポート
-              </Button>
-            </div>
-          </div>
-
-          {/* Presets */}
-          <div className="presets mb-4">
-            <h3 className="font-semibold mb-2">クイックプリセット</h3>
-            <div className="preset-tags flex flex-wrap gap-2">
-              {presets.map((preset) => (
-                <Button
-                  key={preset.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAddPreset(preset)}
-                  className="rounded-full"
-                >
-                  {preset.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">タイムスライス入力</h2>
-            <Button
-              variant="outline"
-              onClick={handleAddTimeEntry}
-              className="flex items-center gap-2 hover:bg-gray-50"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-500"
-              >
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>新しい行を追加</span>
-            </Button>
+            {/* Show quick presets only if we have any */}
+            {presets.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {presets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddPreset(preset)}
+                    className="text-xs hover:bg-primary/5 transition-colors"
+                  >
+                    {preset.name}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mb-4 border rounded-md min-h-[200px] flex flex-col">
             {isLoading ? (
-              <div className="flex justify-center items-center flex-grow"><p>読み込み中...</p></div>
+              <div className="flex justify-center items-center flex-grow py-10">
+                <div className="flex flex-col items-center">
+                  <RefreshCw className="h-6 w-6 text-primary/70 animate-spin mb-2" />
+                  <p>読み込み中...</p>
+                </div>
+              </div>
             ) : error && timeEntries.length === 0 ? (
-              <div className="flex justify-center items-center flex-grow"><p className="text-red-500">データの取得に失敗しました。</p></div>
+              <div className="flex justify-center items-center flex-grow py-10">
+                <p className="text-destructive flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5" />
+                  データの取得に失敗しました
+                </p>
+              </div>
             ) : !isLoading && timeEntries.length === 0 ? (
-              <div className="flex justify-center items-center flex-grow"><p>この日付のデータはありません。</p></div>
+              <div className="flex justify-center items-center flex-grow py-10">
+                <div className="flex flex-col items-center text-muted-foreground">
+                  <Calendar className="h-10 w-10 mb-2 text-primary/30" />
+                  <p>この日付のデータはありません</p>
+                </div>
+              </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <DndContext 
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                    modifiers={[restrictToVerticalAxis]}
-                  >
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10">&nbsp;</TableHead>
-                          <TableHead className="w-48">時間</TableHead>
-                          <TableHead>内容</TableHead>
-                          <TableHead>クライアント</TableHead>
-                          <TableHead>目的</TableHead>
-                          <TableHead>アクション</TableHead>
-                          <TableHead>誰と</TableHead>
-                          <TableHead>PC/CC</TableHead>
-                          <TableHead>備考</TableHead>
-                          <TableHead className="w-20">操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <SortableContext 
-                          items={timeEntries.map(e => e.id)} 
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {timeEntries.map((entry) => (
-                            <SortableItem
-                              key={entry.id}
-                              id={entry.id}
-                              entry={entry}
-                              onTimeEntryChange={handleTimeEntryChange}
-                              onDeleteTimeEntry={handleDeleteTimeEntry}
-                              onUpdateTime={handleUpdateTime}
-                              onDuplicateTimeEntry={handleDuplicateTimeEntry}
-                              dbItems={dbItems}
-                            />
-                          ))}
-                        </SortableContext>
-                      </TableBody>
-                    </Table>
-                  </DndContext>
-                </div>
-                <div className="p-2 border-t">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddTimeEntry}
-                    disabled={isLoading}
-                  >
-                    新しい行を追加
-                  </Button>
-                </div>
+                {isMobile ? (
+                  // Mobile view with cards
+                  <div className="p-2">
+                    <MobileTimeEntryList
+                      timeEntries={timeEntries}
+                      dbItems={dbItems}
+                      onAddTimeEntry={handleAddTimeEntry}
+                      onTimeEntryChange={handleTimeEntryChange}
+                      onDeleteTimeEntry={handleDeleteTimeEntry}
+                      onUpdateTime={handleUpdateTime}
+                      onDuplicateTimeEntry={handleDuplicateTimeEntry}
+                      onReorderTimeEntries={handleReorderTimeEntries}
+                    />
+                  </div>
+                ) : (
+                  // Desktop view with table
+                  <div className="overflow-x-auto">
+                    <DndContext 
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                      modifiers={[restrictToVerticalAxis]}
+                    >
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">&nbsp;</TableHead>
+                            <TableHead className="w-48">
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <span>時間</span>
+                              </div>
+                            </TableHead>
+                            <TableHead>内容</TableHead>
+                            <TableHead>クライアント</TableHead>
+                            <TableHead>目的</TableHead>
+                            <TableHead>アクション</TableHead>
+                            <TableHead>誰と</TableHead>
+                            <TableHead>PC/CC</TableHead>
+                            <TableHead>備考</TableHead>
+                            <TableHead className="w-20">操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <SortableContext 
+                            items={timeEntries.map(e => e.id)} 
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {timeEntries.map((entry) => (
+                              <SortableItem
+                                key={entry.id}
+                                id={entry.id}
+                                entry={entry}
+                                onTimeEntryChange={handleTimeEntryChange}
+                                onDeleteTimeEntry={handleDeleteTimeEntry}
+                                onUpdateTime={handleUpdateTime}
+                                onDuplicateTimeEntry={handleDuplicateTimeEntry}
+                                dbItems={dbItems}
+                              />
+                            ))}
+                          </SortableContext>
+                        </TableBody>
+                      </Table>
+                    </DndContext>
+                  </div>
+                )}
+                {!isMobile && (
+                  <div className="p-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddTimeEntry}
+                      disabled={isLoading}
+                      className="flex items-center gap-1.5 hover:bg-primary/5 transition-colors"
+                    >
+                      <Plus className="h-4 w-4 text-primary/70" />
+                      <span>新しい行を追加</span>
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1402,10 +1416,20 @@ export default function Home() {
 
           {/* TODO: Implement save functionality and update last updated time */} 
           <div className="footer flex justify-between items-center border-t pt-4">
-            <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? '保存中...' : '保存する'}
+            <Button onClick={handleSave} disabled={isLoading} className="flex items-center gap-1.5">
+              {isLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin mr-1" />
+                  <span>保存中...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-1" />
+                  <span>保存する</span>
+                </>
+              )}
             </Button>
-            <span>{lastUpdated}</span>
+            <span className="text-sm text-muted-foreground">{lastUpdated}</span>
           </div>
         </TabsContent>
 
