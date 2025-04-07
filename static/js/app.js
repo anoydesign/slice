@@ -99,11 +99,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     // 削除後の行の時間を更新
                     const rows = timeEntriesTable.querySelectorAll('tbody tr');
                     if (rows.length > 0) {
-                        let currentTime = rows[0].querySelector('.time-input').value.split(' - ')[0];
+                        let currentTime = rows[0].querySelector('.time-display').getAttribute('data-start-time');
                         rows.forEach(row => {
-                            const timeInput = row.querySelector('.time-input');
+                            const timeDisplay = row.querySelector('.time-display');
                             const nextTime = getNextTimeSlot(currentTime);
-                            timeInput.value = `${currentTime} - ${nextTime}`;
+                            updateTimeDisplay(timeDisplay, currentTime, nextTime);
                             currentTime = nextTime;
                         });
                     }
@@ -170,15 +170,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (rows.length === 0) return;
             
             // 最初の行の開始時間を取得
-            const firstTimeInput = rows[0].querySelector('.time-input');
-            const firstTime = firstTimeInput.value.split(' - ')[0];
+            const firstTimeDisplay = rows[0].querySelector('.time-display');
+            const firstTime = firstTimeDisplay ? firstTimeDisplay.getAttribute('data-start-time') : '';
             
             // すべての行の時間を更新
             let currentTime = firstTime;
             rows.forEach(row => {
-                const timeInput = row.querySelector('.time-input');
+                const timeDisplay = row.querySelector('.time-display');
                 const nextTime = getNextTimeSlot(currentTime);
-                timeInput.value = `${currentTime} - ${nextTime}`;
+                updateTimeDisplay(timeDisplay, currentTime, nextTime);
                 currentTime = nextTime;
             });
             
@@ -186,21 +186,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function updateTimeDisplay(timeDisplay, startTime, endTime) {
+        if (!timeDisplay) return;
+        timeDisplay.setAttribute('data-start-time', startTime || '');
+        timeDisplay.setAttribute('data-end-time', endTime || '');
+        timeDisplay.textContent = startTime && endTime ? `${startTime} - ${endTime}` : '';
+    }
+
     function updateTimeSlots() {
         const rows = timeEntriesTable.querySelectorAll('tbody tr');
         if (rows.length === 0) return;
 
-        // 最初の行の開始時間を取得
-        const firstTimeInput = rows[0].querySelector('.time-input');
-        const firstTime = firstTimeInput.value.split(' - ')[0];
+        let currentTime = rows[0].querySelector('.time-display')?.getAttribute('data-start-time') || '';
         
-        // すべての行の時間を更新
-        let currentTime = firstTime;
         rows.forEach(row => {
-            const timeInput = row.querySelector('.time-input');
-            const nextTime = getNextTimeSlot(currentTime);
-            timeInput.value = `${currentTime} - ${nextTime}`;
-            currentTime = nextTime;
+            const timeDisplay = row.querySelector('.time-display');
+            if (timeDisplay) {
+                const nextTime = getNextTimeSlot(currentTime);
+                updateTimeDisplay(timeDisplay, currentTime, nextTime);
+                currentTime = nextTime;
+            }
         });
     }
 
@@ -287,33 +292,63 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         entries.forEach(entry => {
-            createRow(entry.time, entry.task, entry.function, entry.mall, entry.remark);
+            // 時間文字列を分解して開始時間と終了時間を取得
+            const [startTime, endTime] = (entry.time || '').split(' - ');
+            if (!startTime || !endTime) {
+                console.error('無効な時間形式:', entry.time);
+                return;
+            }
+            createRow(startTime, entry.task, entry.function, entry.mall, entry.remark);
         });
+        updateTimeSlots();
         updateStats();
     }
 
     function getNextTimeSlot(timeStr) {
-        if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return "00:00";
+        if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) {
+            console.error("無効な時間形式:", timeStr);
+            return "00:00";
+        }
+        
         const [hours, minutes] = timeStr.split(':').map(Number);
+        if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+            console.error("無効な時間値:", hours, minutes);
+            return "00:00";
+        }
+
         let nextMinutes = minutes + 30;
         let nextHours = hours;
+        
         if (nextMinutes >= 60) {
             nextMinutes -= 60;
             nextHours += 1;
         }
-        if (nextHours >= 24) nextHours -= 24;
+        
+        if (nextHours >= 24) {
+            nextHours -= 24;
+        }
+        
         return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`;
     }
 
-    function createRow(time = '', task = '', functionValue = '', mall = '', remark = '') {
+    function createRow(startTime = '', task = '', functionValue = '', mall = '', remark = '') {
         const row = timeEntriesTable.insertRow();
-        const endTime = time ? getNextTimeSlot(time) : '';
-        const timeValue = time && endTime ? `${time} - ${endTime}` : '';
+        const endTime = startTime ? getNextTimeSlot(startTime) : '';
+        
+        // 時間が無効な場合のフォールバック
+        if (!startTime || !endTime || startTime === '00:00' || endTime === '00:00') {
+            if (defaultTimesStart.length > 0) {
+                startTime = defaultTimesStart[0];
+                endTime = getNextTimeSlot(startTime);
+            }
+        }
         
         row.innerHTML = `
             <td class="time-column">
                 <div class="drag-handle" draggable="true">⋮⋮</div>
-                <input type="text" class="time-input" value="${timeValue}" placeholder="例: 9:00 - 9:30">
+                <span class="time-display" data-start-time="${startTime}" data-end-time="${endTime}">
+                    ${startTime && endTime ? `${startTime} - ${endTime}` : ''}
+                </span>
             </td>
             <td><input type="text" class="task-input" value="${task}" placeholder="内容を入力"></td>
             <td><input type="text" class="function-input" value="${functionValue}" placeholder="機能を選択"></td>
@@ -343,45 +378,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function addEmptyRow() {
         const lastRow = timeEntriesTable.rows[timeEntriesTable.rows.length - 1];
         let nextTime = '';
-        let baseTime = '';
-        let isRange = false;
+        
         if (lastRow) {
-            const timeInput = lastRow.cells[0].querySelector('.time-input');
-            baseTime = timeInput ? timeInput.value.trim() : lastRow.cells[0].textContent.trim();
-            if(baseTime.includes(" - ")) {
-                const parts = baseTime.split(" - ");
-                if(parts.length === 2) {
-                    isRange = true;
-                    baseTime = parts[1].trim();
-                }
+            const timeDisplay = lastRow.querySelector('.time-display');
+            if (timeDisplay) {
+                nextTime = timeDisplay.getAttribute('data-end-time');
             }
         }
-        if (baseTime && /^\d{2}:\d{2}$/.test(baseTime)) {
-            try {
-                const nextSingleTime = getNextTimeSlot(baseTime);
-                nextTime = isRange ? baseTime + " - " + nextSingleTime : nextSingleTime;
-            } catch (e) {
-                console.error("Error calculating next time from last row:", e);
-                nextTime = '';
-            }
-        }
+        
         if (!nextTime && defaultTimesStart.length > 0) {
-            let foundIndex = -1;
-            if(baseTime) {
-                foundIndex = defaultTimesStart.findIndex(t => t >= baseTime);
-            }
-            const nextIndex = (foundIndex !== -1) ? foundIndex + 1 : defaultTimesStart.length;
-            if (nextIndex < defaultTimesStart.length) {
-                nextTime = defaultTimesStart[nextIndex];
-            } else {
-                const lastDefaultTime = defaultTimesStart[defaultTimesStart.length - 1];
-                if (lastDefaultTime && /^\d{2}:\d{2}$/.test(lastDefaultTime)) {
-                    try {
-                        nextTime = getNextTimeSlot(lastDefaultTime);
-                    } catch(e) { }
-                }
-            }
+            nextTime = defaultTimesStart[0];
         }
+        
         createRow(nextTime, "", "", "", "");
         const newRow = timeEntriesTable.rows[timeEntriesTable.rows.length - 1];
         if (newRow) {
@@ -395,8 +403,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function duplicateRow(button) {
         const row = button.closest('tr');
-        const timeInput = row.querySelector('.time-input');
-        const [startTime, endTime] = (timeInput.value || '').split(' - ');
+        const timeDisplay = row.querySelector('.time-display');
+        const startTime = timeDisplay.getAttribute('data-start-time');
+        const endTime = timeDisplay.getAttribute('data-end-time');
         
         if (!startTime || !endTime) {
             showTemporaryMessage('時間が正しく設定されていません', 'error');
@@ -416,12 +425,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // 新しい行を作成（直後に挿入）
         const tbody = timeEntriesTable.querySelector('tbody') || timeEntriesTable;
         const newRow = document.createElement('tr');
-        const timeValue = `${newStartTime} - ${newEndTime}`;
         
         newRow.innerHTML = `
             <td class="time-column">
                 <div class="drag-handle" draggable="true">⋮⋮</div>
-                <input type="text" class="time-input" value="${timeValue}" placeholder="例: 9:00 - 9:30">
+                <span class="time-display" data-start-time="${newStartTime}" data-end-time="${newEndTime}">
+                    ${newStartTime && newEndTime ? `${newStartTime} - ${newEndTime}` : ''}
+                </span>
             </td>
             <td><input type="text" class="task-input" value="${task}" placeholder="内容を入力"></td>
             <td><input type="text" class="function-input" value="${functionValue}" placeholder="機能を選択"></td>
@@ -456,9 +466,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let currentTime = newEndTime;
         let nextRow = newRow.nextElementSibling;
         while (nextRow) {
-            const nextTimeInput = nextRow.querySelector('.time-input');
+            const nextTimeDisplay = nextRow.querySelector('.time-display');
             const nextEndTime = getNextTimeSlot(currentTime);
-            nextTimeInput.value = `${currentTime} - ${nextEndTime}`;
+            updateTimeDisplay(nextTimeDisplay, currentTime, nextEndTime);
             currentTime = nextEndTime;
             nextRow = nextRow.nextElementSibling;
         }
@@ -474,8 +484,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let hasError = false;
 
         rows.forEach(row => {
-            const timeInput = row.querySelector('.time-input');
-            const time = timeInput.value;
+            const timeDisplay = row.querySelector('.time-display');
+            const startTime = timeDisplay ? timeDisplay.getAttribute('data-start-time') : '';
+            const endTime = timeDisplay ? timeDisplay.getAttribute('data-end-time') : '';
             const task = row.querySelector('td:nth-child(2) input').value;
             const functionValue = row.querySelector('td:nth-child(3) input').value;
             const mall = row.querySelector('td:nth-child(4) input').value;
@@ -488,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             entries.push({
-                time,
+                time: `${startTime} - ${endTime}`,
                 task,
                 function: functionValue,
                 mall,
