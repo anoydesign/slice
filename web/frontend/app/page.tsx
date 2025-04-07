@@ -12,9 +12,31 @@ import {
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
+  const [timeEntries, setTimeEntries] = React.useState([
+    { id: 1, time: "09:00 - 09:30", task: "メールチェック", function: "管理", mall: "-", remark: "", selected: false },
+    { id: 2, time: "09:30 - 10:00", task: "朝礼", function: "会議", mall: "-", remark: "", selected: false },
+    { id: 3, time: "10:00 - 12:00", task: "機能開発A", function: "開発", mall: "共通", remark: "バグ修正含む", selected: true },
+  ]);
+
+  const handleSelectRow = (id: number, checked: boolean) => {
+    setTimeEntries(timeEntries.map(entry =>
+      entry.id === id ? { ...entry, selected: checked } : entry
+    ));
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -73,10 +95,45 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Placeholder for Time Entries Table */}
-          <div className="mb-4">
-            <p className="text-gray-500">（ここにタイムエントリのテーブルが表示されます）</p>
-            {/* Add Table component here later */}
+          {/* Time Entries Table */}
+          <div className="mb-4 border rounded-md">
+             <Table>
+              <TableHeader>
+                <TableRow>
+                  {/* Add Checkbox column if needed for bulk actions */}
+                  {/* <TableHead className="w-[50px]">選択</TableHead> */}
+                  <TableHead className="w-[150px]">時間</TableHead>
+                  <TableHead>内容</TableHead>
+                  <TableHead>機能別</TableHead>
+                  <TableHead>モール別</TableHead>
+                  <TableHead>備考</TableHead>
+                  <TableHead className="text-right w-[100px]">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {timeEntries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    {/* <TableCell>
+                      <Checkbox
+                        checked={entry.selected}
+                        onCheckedChange={(checked) => handleSelectRow(entry.id, Boolean(checked))}
+                        aria-label={`Select row ${entry.id}`}
+                      />
+                    </TableCell> */}
+                    <TableCell className="font-medium">{entry.time}</TableCell>
+                    {/* Make cells editable later */}
+                    <TableCell>{entry.task}</TableCell>
+                    <TableCell>{entry.function}</TableCell>
+                    <TableCell>{entry.mall}</TableCell>
+                    <TableCell>{entry.remark}</TableCell>
+                    <TableCell className="text-right">
+                      {/* Add action buttons like delete later */}
+                       <Button variant="ghost" size="sm">削除</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
 
           <Button variant="secondary" className="mb-4">
