@@ -20,13 +20,24 @@ func main() {
 		log.Fatalf("作業ディレクトリの取得に失敗しました: %v", err)
 	}
 	credentialsFile := filepath.Join(wd, "credentials.json")
+
+	// スプレッドシートIDの設定と確認（環境変数から取得することも検討）
 	spreadsheetID := "1z1EdC08aVvj0uUfO85HwfIp6k43OmcbPfV91jUrF3EQ"
+	log.Printf("認証ファイル: %s", credentialsFile)
+	log.Printf("スプレッドシートID: %s", spreadsheetID)
+
+	// credentials.jsonが存在するか確認
+	if _, err := os.Stat(credentialsFile); os.IsNotExist(err) {
+		log.Fatalf("認証ファイルが見つかりません: %s", credentialsFile)
+	}
 
 	// スプレッドシートリポジトリの初期化
 	repo, err := repository.NewSheetsRepository(ctx, credentialsFile, spreadsheetID)
 	if err != nil {
 		log.Fatalf("スプレッドシートリポジトリの初期化に失敗しました: %v", err)
 	}
+
+	log.Println("スプレッドシートリポジトリの初期化に成功しました")
 
 	// ハンドラーの初期化
 	h := handler.NewHandler(repo)
@@ -51,7 +62,9 @@ func main() {
 	r.GET("/api/time-entries/:date", h.GetTimeEntries)
 	r.POST("/api/time-entries/:date", h.SaveTimeEntries)
 	r.GET("/api/db-items", h.GetDbItems)
+	r.GET("/api/db-items-v2", h.GetDbItems)
 	r.POST("/api/db-items", h.SaveDbItems)
+	r.DELETE("/api/db-items", h.DeleteDbItems)
 
 	// サーバーの起動
 	port := os.Getenv("PORT")
