@@ -475,7 +475,35 @@ export default function Home() {
   };
 
   const handleDeleteTimeEntry = (id: number) => {
-    setTimeEntries(timeEntries.filter(entry => entry.id !== id));
+    setTimeEntries(prevEntries => {
+      // 削除する行のインデックスを見つける
+      const index = prevEntries.findIndex(entry => entry.id === id);
+      if (index === -1) return prevEntries;
+      
+      // 削除する行の時間情報を取得
+      const deletedEntry = prevEntries[index];
+      const [startTime, endTime] = deletedEntry.time.split(' - ');
+      
+      // 行を削除
+      const newEntries = prevEntries.filter(entry => entry.id !== id);
+      
+      // 後続の行の時間を更新
+      if (index < newEntries.length) {
+        let currentTime = startTime;
+        
+        // 削除した行以降の行の時間を更新
+        for (let i = index; i < newEntries.length; i++) {
+          const nextTime = getNextTimeSlot(currentTime);
+          newEntries[i] = {
+            ...newEntries[i],
+            time: `${currentTime} - ${nextTime}`
+          };
+          currentTime = nextTime;
+        }
+      }
+      
+      return newEntries;
+    });
   };
 
   const handleAddTimeEntry = () => {

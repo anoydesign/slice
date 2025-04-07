@@ -248,6 +248,14 @@ func (r *SheetsRepository) GetDbItems() ([]models.DbItem, error) {
 
 	fmt.Printf("取得したデータ: %+v\n", resp.Values)
 
+	// 詳細なデバッグログを追加
+	fmt.Println("======= 取得データの詳細 =======")
+	fmt.Printf("データ行数: %d\n", len(resp.Values))
+	for i, row := range resp.Values {
+		fmt.Printf("行 %d: 列数=%d 内容=%v\n", i+1, len(row), row)
+	}
+	fmt.Println("==============================")
+
 	if len(resp.Values) == 0 {
 		fmt.Println("シートにデータがありません。")
 		return []models.DbItem{}, nil // No data in the sheet

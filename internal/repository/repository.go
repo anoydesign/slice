@@ -13,6 +13,7 @@ type Repository interface {
 	SaveTimeEntries(date string, entries []models.TimeEntry) (time.Time, error)
 	GetDbItems() ([]models.DbItem, error)
 	SaveDbItems(items []models.DbItem) error
+	DeleteDbItems(items []models.DbItem) error
 }
 
 // SQLiteRepository はSQLiteデータベースを使用するリポジトリの実装
@@ -30,11 +31,15 @@ func NewSQLiteRepository(dbPath string) (*SQLiteRepository, error) {
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS time_entries (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			date TEXT NOT NULL,
 			time TEXT NOT NULL,
-			task TEXT,
-			function TEXT,
-			mall TEXT,
-			cost_type TEXT,
+			content TEXT,
+			client TEXT,
+			purpose TEXT,
+			action TEXT,
+			with_whom TEXT,
+			pccc TEXT,
+			remark TEXT,
 			updated_at TEXT NOT NULL
 		);
 		
@@ -53,10 +58,11 @@ func NewSQLiteRepository(dbPath string) (*SQLiteRepository, error) {
 
 func (r *SQLiteRepository) GetTimeEntries(date string) ([]models.TimeEntry, error) {
 	rows, err := r.db.Query(`
-		SELECT id, time, task, function, mall, cost_type, updated_at
+		SELECT time, content, client, purpose, action, with_whom, pccc, remark
 		FROM time_entries
+		WHERE date = ?
 		ORDER BY time
-	`)
+	`, date)
 	if err != nil {
 		return nil, err
 	}
@@ -66,13 +72,14 @@ func (r *SQLiteRepository) GetTimeEntries(date string) ([]models.TimeEntry, erro
 	for rows.Next() {
 		var entry models.TimeEntry
 		err := rows.Scan(
-			&entry.ID,
 			&entry.Time,
-			&entry.Task,
-			&entry.Function,
-			&entry.Mall,
-			&entry.CostType,
-			&entry.UpdatedAt,
+			&entry.Content,
+			&entry.Client,
+			&entry.Purpose,
+			&entry.Action,
+			&entry.With,
+			&entry.PcCc,
+			&entry.Remark,
 		)
 		if err != nil {
 			return nil, err
@@ -90,7 +97,7 @@ func (r *SQLiteRepository) SaveTimeEntries(date string, entries []models.TimeEnt
 	}
 
 	// 既存のエントリを削除
-	_, err = tx.Exec("DELETE FROM time_entries")
+	_, err = tx.Exec("DELETE FROM time_entries WHERE date = ?", date)
 	if err != nil {
 		tx.Rollback()
 		return time.Time{}, err
@@ -98,8 +105,8 @@ func (r *SQLiteRepository) SaveTimeEntries(date string, entries []models.TimeEnt
 
 	// 新しいエントリを追加
 	stmt, err := tx.Prepare(`
-		INSERT INTO time_entries (time, task, function, mall, cost_type, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO time_entries (date, time, content, client, purpose, action, with_whom, pccc, remark, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -108,14 +115,19 @@ func (r *SQLiteRepository) SaveTimeEntries(date string, entries []models.TimeEnt
 	defer stmt.Close()
 
 	now := time.Now()
+	formattedNow := now.Format("2006-01-02 15:04:05")
 	for _, entry := range entries {
 		_, err := stmt.Exec(
+			date,
 			entry.Time,
-			entry.Task,
-			entry.Function,
-			entry.Mall,
-			entry.CostType,
-			entry.UpdatedAt,
+			entry.Content,
+			entry.Client,
+			entry.Purpose,
+			entry.Action,
+			entry.With,
+			entry.PcCc,
+			entry.Remark,
+			formattedNow,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -148,6 +160,17 @@ func (r *SQLiteRepository) GetDbItems() ([]models.DbItem, error) {
 		if err != nil {
 			return nil, err
 		}
+		// 古いフィールド名を新しいフィールド名にマッピング
+		switch item.Type {
+		case "task":
+			item.Type = "content"
+		case "function":
+			item.Type = "action"
+		case "mall":
+			item.Type = "with"
+		case "costtype":
+			item.Type = "pccc"
+		}
 		items = append(items, item)
 	}
 
@@ -172,6 +195,26 @@ func (r *SQLiteRepository) SaveDbItems(items []models.DbItem) error {
 		_, err = tx.Exec(`
 			INSERT INTO db_items (type, value)
 			VALUES (?, ?)
+		`, item.Type, item.Value)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *SQLiteRepository) DeleteDbItems(items []models.DbItem) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		_, err = tx.Exec(`
+			DELETE FROM db_items
+			WHERE type = ? AND value = ?
 		`, item.Type, item.Value)
 		if err != nil {
 			tx.Rollback()
