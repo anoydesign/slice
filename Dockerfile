@@ -18,7 +18,7 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# ビルドステージからバイナリをコピー
+# 必要なファイルをコピー
 COPY --from=builder /app/timeslice-app /app/
 COPY --from=builder /app/static /app/static/
 COPY --from=builder /app/templates /app/templates/
