@@ -23,6 +23,15 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Cross2Icon } from "@radix-ui/react-icons";
 
 export default function Home() {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
@@ -32,10 +41,42 @@ export default function Home() {
     { id: 3, time: "10:00 - 12:00", task: "機能開発A", function: "開発", mall: "共通", remark: "バグ修正含む", selected: true },
   ]);
 
+  const [dbItems, setDbItems] = React.useState<{
+    task: string[];
+    function: string[];
+    mall: string[];
+    remark: string[];
+  }>({
+    task: ["メールチェック", "朝礼", "機能開発A", "定例会議"],
+    function: ["管理", "会議", "開発"],
+    mall: ["共通", "楽天", "Yahoo"],
+    remark: ["急ぎ", "確認中"],
+  });
+  const [newDbItemType, setNewDbItemType] = React.useState<keyof typeof dbItems>("task");
+  const [newDbItemValue, setNewDbItemValue] = React.useState("");
+
   const handleSelectRow = (id: number, checked: boolean) => {
     setTimeEntries(timeEntries.map(entry =>
       entry.id === id ? { ...entry, selected: checked } : entry
     ));
+  };
+
+  const handleAddDbItem = () => {
+    if (!newDbItemValue.trim()) return;
+    setDbItems(prev => ({
+      ...prev,
+      [newDbItemType]: [...prev[newDbItemType], newDbItemValue.trim()]
+    }));
+    setNewDbItemValue("");
+    console.log(`Adding ${newDbItemValue} to ${newDbItemType}`);
+  };
+
+  const handleDeleteDbItem = (type: keyof typeof dbItems, itemToDelete: string) => {
+    setDbItems(prev => ({
+      ...prev,
+      [type]: prev[type].filter(item => item !== itemToDelete)
+    }));
+    console.log(`Deleting ${itemToDelete} from ${type}`);
   };
 
   return (
@@ -162,22 +203,54 @@ export default function Home() {
                <Button variant="secondary">スプレッドシートからインポート</Button>
            </div>
 
-          {/* Placeholder for DB Add Form */}
-          <div className="db-add-form flex space-x-2 mb-4">
-             <p className="text-gray-500">（ここにDB追加フォームが表示されます）</p>
-             {/* Add Select, Input, Button here later */}
+          {/* DB Add Form */}
+          <div className="db-add-form flex space-x-2 mb-4 p-4 border rounded-md">
+             <Select value={newDbItemType} onValueChange={(value) => setNewDbItemType(value as keyof typeof dbItems)}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="種類を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="task">内容</SelectItem>
+                  <SelectItem value="function">機能別</SelectItem>
+                  <SelectItem value="mall">モール別</SelectItem>
+                  <SelectItem value="remark">備考</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                  type="text"
+                  placeholder="登録する項目名"
+                  value={newDbItemValue}
+                  onChange={(e) => setNewDbItemValue(e.target.value)}
+                  className="flex-grow"
+              />
+              <Button onClick={handleAddDbItem}>追加</Button>
           </div>
 
-          {/* Placeholder for DB Sections */}
-          <div className="space-y-4">
-              <div className="database-section">
-                  <h3 className="font-semibold mb-2">登録済み: 内容</h3>
-                  <div className="database-items">
-                       <p className="text-gray-500">（ここに内容アイテムが表示されます）</p>
-                       {/* Add Badges here later */}
+          {/* DB Sections */}
+          <div className="space-y-6">
+              {(Object.keys(dbItems) as Array<keyof typeof dbItems>).map(type => (
+                  <div key={type} className="database-section border rounded-md p-4">
+                      <h3 className="font-semibold mb-2 capitalize">登録済み: {type === 'task' ? '内容' : type === 'function' ? '機能別' : type === 'mall' ? 'モール別' : '備考'}</h3>
+                      <div className="database-items flex flex-wrap gap-2">
+                          {dbItems[type].length > 0 ? (
+                              dbItems[type].map(item => (
+                                  <Badge key={item} variant="secondary" className="relative group pr-6">
+                                      {item}
+                                      <button
+                                        onClick={() => handleDeleteDbItem(type, item)}
+                                        className="absolute top-1/2 right-1 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        aria-label={`Delete ${item}`}
+                                      >
+                                          <Cross2Icon className="h-3 w-3" />
+                                      </button>
+                                  </Badge>
+                              ))
+                          ) : (
+                              <p className="text-sm text-muted-foreground">登録済みの項目はありません。</p>
+                          )}
+                      </div>
                   </div>
-              </div>
-              {/* Add other DB sections (function, mall, remark) later */}
+              ))}
           </div>
         </TabsContent>
       </Tabs>
