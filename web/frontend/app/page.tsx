@@ -31,6 +31,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableItem } from './components/SortableItem';
 
 // Define types for the data fetched from the API
 interface FrontendTimeEntry {
@@ -50,8 +53,49 @@ interface DbItems {
   remark: string[];
 }
 
+interface Preset {
+  id: string;
+  name: string;
+  time: string;
+  task: string;
+  function: string;
+  mall: string;
+  remark: string;
+}
+
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
+
+// デフォルトのプリセット
+const DEFAULT_PRESETS: Preset[] = [
+  {
+    id: "meeting",
+    name: "会議",
+    time: "1:00",
+    task: "会議",
+    function: "会議",
+    mall: "",
+    remark: ""
+  },
+  {
+    id: "development",
+    name: "開発",
+    time: "2:00",
+    task: "開発",
+    function: "フロントエンド",
+    mall: "",
+    remark: ""
+  },
+  {
+    id: "break",
+    name: "休憩",
+    time: "0:30",
+    task: "休憩",
+    function: "休憩",
+    mall: "",
+    remark: ""
+  }
+];
 
 export default function Home() {
   const [date, setDate] = useState<Date | undefined>(new Date());
@@ -62,6 +106,15 @@ export default function Home() {
   const [newDbItemValue, setNewDbItemValue] = useState("");
   const [isLoading, setIsLoading] = useState(false); // Loading state
   const [error, setError] = useState<string | null>(null); // Error state
+  const [lastUpdated, setLastUpdated] = useState<string>("まだ保存されていません");
+  const [presets, setPresets] = useState<Preset[]>(DEFAULT_PRESETS);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Function to fetch time entries for a given date
   const fetchTimeEntries = async (fetchDate: Date) => {
@@ -165,6 +218,239 @@ export default function Home() {
     console.log(`Deleting ${itemToDelete} from ${type} (API call needed)`);
   };
 
+  const handleSave = async () => {
+    if (!date) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${format(date, 'yyyy-MM-dd')}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(timeEntries),
+      });
+
+      if (!response.ok) {
+        throw new Error('保存に失敗しました');
+      }
+
+      const data = await response.json();
+      setLastUpdated(`最終更新: ${data.updated_at}`);
+    } catch (error) {
+      console.error('保存エラー:', error);
+      setError(error instanceof Error ? error.message : '保存に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTimeEntryChange = (id: number, field: keyof FrontendTimeEntry, value: string) => {
+    setTimeEntries(timeEntries.map(entry =>
+      entry.id === id ? { ...entry, [field]: value } : entry
+    ));
+  };
+
+  const handleDeleteTimeEntry = (id: number) => {
+    setTimeEntries(timeEntries.filter(entry => entry.id !== id));
+  };
+
+  const handleAddTimeEntry = () => {
+    const newEntry: FrontendTimeEntry = {
+      id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+      time: '',
+      task: '',
+      function: '',
+      mall: '',
+      remark: '',
+      selected: false
+    };
+    setTimeEntries([...timeEntries, newEntry]);
+  };
+
+  const handleAddPreset = (preset: Preset) => {
+    const newEntry: FrontendTimeEntry = {
+      id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+      time: preset.time,
+      task: preset.task,
+      function: preset.function,
+      mall: preset.mall,
+      remark: preset.remark,
+      selected: false
+    };
+    setTimeEntries([...timeEntries, newEntry]);
+  };
+
+  const handleImportYesterday = async () => {
+    if (!date) return;
+    setIsLoading(true);
+    try {
+      // 昨日の日付を計算
+      const yesterday = new Date(date);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const formattedYesterday = format(yesterday, 'yyyy-MM-dd');
+
+      // 昨日のデータを取得
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedYesterday}`);
+      if (!response.ok) {
+        throw new Error('昨日のデータの取得に失敗しました');
+      }
+
+      const yesterdayEntries: FrontendTimeEntry[] = await response.json();
+      if (yesterdayEntries.length === 0) {
+        throw new Error('昨日のデータがありません');
+      }
+
+      // 新しいIDを割り当てて今日のデータとして追加
+      const newEntries = yesterdayEntries.map(entry => ({
+        ...entry,
+        id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+        selected: false
+      }));
+
+      setTimeEntries([...timeEntries, ...newEntries]);
+    } catch (error) {
+      console.error('昨日のデータのインポートエラー:', error);
+      setError(error instanceof Error ? error.message : '昨日のデータのインポートに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportLastWeek = async () => {
+    if (!date) return;
+    setIsLoading(true);
+    try {
+      // 先週の日付を計算
+      const lastWeek = new Date(date);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      const formattedLastWeek = format(lastWeek, 'yyyy-MM-dd');
+
+      // 先週のデータを取得
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${formattedLastWeek}`);
+      if (!response.ok) {
+        throw new Error('先週のデータの取得に失敗しました');
+      }
+
+      const lastWeekEntries: FrontendTimeEntry[] = await response.json();
+      if (lastWeekEntries.length === 0) {
+        throw new Error('先週のデータがありません');
+      }
+
+      // 新しいIDを割り当てて今日のデータとして追加
+      const newEntries = lastWeekEntries.map(entry => ({
+        ...entry,
+        id: timeEntries.length > 0 ? Math.max(...timeEntries.map(e => e.id)) + 1 : 1,
+        selected: false
+      }));
+
+      setTimeEntries([...timeEntries, ...newEntries]);
+    } catch (error) {
+      console.error('先週のデータのインポートエラー:', error);
+      setError(error instanceof Error ? error.message : '先週のデータのインポートに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportFromSpreadsheet = async () => {
+    if (!date) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/time-entries/${format(date, 'yyyy-MM-dd')}`);
+      if (!response.ok) {
+        throw new Error('スプレッドシートからのデータ取得に失敗しました');
+      }
+
+      const data = await response.json();
+      if (!data || data.length === 0) {
+        throw new Error('スプレッドシートにデータがありません');
+      }
+
+      // 既存のデータを上書き
+      setTimeEntries(data.map((entry: any) => ({
+        ...entry,
+        id: entry.id || Math.floor(Math.random() * 1000000),
+        selected: false
+      })));
+    } catch (error) {
+      console.error('インポートエラー:', error);
+      setError(error instanceof Error ? error.message : 'インポートに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      setTimeEntries((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // 時間を更新
+        let currentTime = newItems[0].time.split(' - ')[0];
+        return newItems.map((item, index) => {
+          if (index === 0) return item;
+          const nextTime = getNextTimeSlot(currentTime);
+          const updatedItem = {
+            ...item,
+            time: `${currentTime} - ${nextTime}`
+          };
+          currentTime = nextTime;
+          return updatedItem;
+        });
+      });
+    }
+  };
+
+  const getNextTimeSlot = (timeStr: string): string => {
+    if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) {
+      return "00:00";
+    }
+    
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    let nextMinutes = minutes + 30;
+    let nextHours = hours;
+    
+    if (nextMinutes >= 60) {
+      nextMinutes -= 60;
+      nextHours += 1;
+    }
+    
+    if (nextHours >= 24) {
+      nextHours -= 24;
+    }
+    
+    return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`;
+  };
+
+  const handleUpdateTime = (id: number, startTime: string, endTime: string) => {
+    setTimeEntries((items) => {
+      const index = items.findIndex((item) => item.id === id);
+      if (index === -1) return items;
+      
+      const newItems = [...items];
+      newItems[index] = {
+        ...newItems[index],
+        time: `${startTime} - ${endTime}`
+      };
+      
+      // 後続の行の時間を更新
+      let currentTime = endTime;
+      for (let i = index + 1; i < newItems.length; i++) {
+        const nextTime = getNextTimeSlot(currentTime);
+        newItems[i] = {
+          ...newItems[i],
+          time: `${currentTime} - ${nextTime}`
+        };
+        currentTime = nextTime;
+      }
+      
+      return newItems;
+    });
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">タイムスライス入力ツール</h1>
@@ -205,65 +491,110 @@ export default function Home() {
             </Popover>
 
             <div className="space-x-2">
-              {/* TODO: Implement Import/Yesterday/LastWeek/Save functionality */} 
-              <Button variant="secondary" disabled={isLoading}>インポート</Button>
-              <Button variant="secondary" disabled={isLoading}>昨日と同じ</Button>
-              <Button variant="secondary" disabled={isLoading}>先週と同じ</Button>
-              <Button disabled={isLoading}>保存する</Button>
+              <Button 
+                variant="secondary" 
+                onClick={handleImportFromSpreadsheet}
+                disabled={isLoading}
+              >
+                インポート
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={handleImportYesterday}
+                disabled={isLoading}
+              >
+                昨日と同じ
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={handleImportLastWeek}
+                disabled={isLoading}
+              >
+                先週と同じ
+              </Button>
+              <Button onClick={handleSave} disabled={isLoading}>
+                {isLoading ? '保存中...' : '保存する'}
+              </Button>
             </div>
           </div>
 
-          {/* TODO: Implement Presets */} 
+          {/* Presets */}
           <div className="presets mb-4">
             <h3 className="font-semibold mb-2">クイックプリセット</h3>
-            <div className="preset-tags">
-              <span className="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2">
-                会議 (例)
-              </span>
+            <div className="preset-tags flex flex-wrap gap-2">
+              {presets.map((preset) => (
+                <Button
+                  key={preset.id}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddPreset(preset)}
+                  className="rounded-full"
+                >
+                  {preset.name}
+                </Button>
+              ))}
             </div>
           </div>
 
-          <div className="mb-4 border rounded-md min-h-[200px] flex flex-col"> {/* Use flex column */}
+          <div className="mb-4 border rounded-md min-h-[200px] flex flex-col">
             {isLoading ? (
               <div className="flex justify-center items-center flex-grow"><p>読み込み中...</p></div>
-            ) : error && timeEntries.length === 0 ? ( // Show error only if no entries are loaded
+            ) : error && timeEntries.length === 0 ? (
               <div className="flex justify-center items-center flex-grow"><p className="text-red-500">データの取得に失敗しました。</p></div>
             ) : !isLoading && timeEntries.length === 0 ? (
               <div className="flex justify-center items-center flex-grow"><p>この日付のデータはありません。</p></div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[150px]">時間</TableHead>
-                    <TableHead>内容</TableHead>
-                    <TableHead>機能別</TableHead>
-                    <TableHead>モール別</TableHead>
-                    <TableHead>備考</TableHead>
-                    <TableHead className="text-right w-[100px]">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {timeEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      {/* TODO: Make cells editable */} 
-                      <TableCell className="font-medium">{entry.time}</TableCell>
-                      <TableCell>{entry.task}</TableCell>
-                      <TableCell>{entry.function}</TableCell>
-                      <TableCell>{entry.mall}</TableCell>
-                      <TableCell>{entry.remark}</TableCell>
-                      <TableCell className="text-right">
-                        {/* TODO: Implement delete functionality */} 
-                        <Button variant="ghost" size="sm" disabled={isLoading}>削除</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <>
+                <div className="overflow-x-auto">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          <th className="w-1/6">時間</th>
+                          <th className="w-1/4">内容</th>
+                          <th className="w-1/6">機能別</th>
+                          <th className="w-1/6">モール別</th>
+                          <th className="w-1/4">備考</th>
+                          <th className="w-1/12">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <SortableContext
+                          items={timeEntries.map((entry) => entry.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {timeEntries.map((entry) => (
+                            <SortableItem
+                              key={entry.id}
+                              id={entry.id}
+                              entry={entry}
+                              onTimeEntryChange={handleTimeEntryChange}
+                              onDeleteTimeEntry={handleDeleteTimeEntry}
+                              onUpdateTime={handleUpdateTime}
+                            />
+                          ))}
+                        </SortableContext>
+                      </tbody>
+                    </table>
+                  </DndContext>
+                </div>
+                <div className="p-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddTimeEntry}
+                    disabled={isLoading}
+                  >
+                    新しい行を追加
+                  </Button>
+                </div>
+              </>
             )}
           </div>
-
-          {/* TODO: Implement Add Row functionality */} 
-          <Button variant="secondary" className="mb-4" disabled={isLoading}>+ 新しい時間枠を追加</Button>
 
           {/* TODO: Calculate total hours correctly */} 
           <div className="stats flex justify-end space-x-4 mb-4">
@@ -273,8 +604,10 @@ export default function Home() {
 
           {/* TODO: Implement save functionality and update last updated time */} 
           <div className="footer flex justify-between items-center border-t pt-4">
-            <Button disabled={isLoading}>保存する</Button>
-            <span>最終更新: まだ保存されていません</span>
+            <Button onClick={handleSave} disabled={isLoading}>
+              {isLoading ? '保存中...' : '保存する'}
+            </Button>
+            <span>{lastUpdated}</span>
           </div>
         </TabsContent>
 
