@@ -12,6 +12,12 @@ import (
 )
 
 func main() {
+	// 環境変数からポート番号を取得（Heroku用）
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // デフォルトポート
+	}
+
 	// スプレッドシートの設定
 	ctx := context.Background()
 	wd, err := os.Getwd()
@@ -45,13 +51,8 @@ func main() {
 	r.POST("/api/db-items", h.SaveDbItems)
 
 	// サーバーの起動
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	addr := "0.0.0.0:" + port
-	log.Printf("サーバーを起動します: http://%s", addr)
-	if err := r.Run(addr); err != nil {
+	log.Printf("サーバーを起動します（ポート: %s）", port)
+	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("サーバーの起動に失敗しました: %v", err)
 	}
 }
