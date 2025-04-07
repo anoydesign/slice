@@ -151,21 +151,22 @@ func (r *SheetsRepository) SaveTimeEntries(date string, entries []models.TimeEnt
 
 func (r *SheetsRepository) GetDbItems() ([]models.DbItem, error) {
 	// ドロップダウンメニューの項目を取得
-	// 業務データベースシートのA2からB列までのデータを取得
-	resp, err := r.Service.Spreadsheets.Values.Get(r.spreadsheetID, "業務データベース!A2:B").Do()
+	// 業務データベースシートのA2からC列までのデータを取得
+	resp, err := r.Service.Spreadsheets.Values.Get(r.spreadsheetID, "業務データベース!A2:C").Do()
 	if err != nil {
 		return nil, fmt.Errorf("業務データベースの取得に失敗しました: %v", err)
 	}
 
 	var items []models.DbItem
 	for _, row := range resp.Values {
-		if len(row) < 2 {
+		if len(row) < 3 {
 			continue
 		}
 
 		item := models.DbItem{
 			Type:  row[0].(string),
 			Value: row[1].(string),
+			Group: row[2].(string),
 		}
 		items = append(items, item)
 	}
@@ -176,7 +177,7 @@ func (r *SheetsRepository) GetDbItems() ([]models.DbItem, error) {
 func (r *SheetsRepository) SaveDbItems(items []models.DbItem) error {
 	// ヘッダー行を準備
 	header := [][]interface{}{
-		{"項目種別", "項目名"},
+		{"項目種別", "項目名", "グループ"},
 	}
 
 	// データ行を準備
@@ -185,6 +186,7 @@ func (r *SheetsRepository) SaveDbItems(items []models.DbItem) error {
 		row := []interface{}{
 			item.Type,
 			item.Value,
+			item.Group,
 		}
 		values = append(values, row)
 	}
@@ -202,8 +204,7 @@ func (r *SheetsRepository) SaveDbItems(items []models.DbItem) error {
 
 	// 新しいデータを書き込む
 	_, err = r.Service.Spreadsheets.Values.Update(r.spreadsheetID, "業務データベース!A1", valueRange).
-		ValueInputOption("RAW").
-		Do()
+		ValueInputOption("RAW").Do()
 	if err != nil {
 		return fmt.Errorf("データの書き込みに失敗しました: %v", err)
 	}

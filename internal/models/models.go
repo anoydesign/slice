@@ -16,4 +16,5 @@ type DbItem struct {
 	ID    int64  `json:"id"`
 	Type  string `json:"Type"`
 	Value string `json:"Value"`
+	Group string `json:"Group"`
 }
