@@ -29,8 +29,8 @@
 
 1. リポジトリをクローン
    ```
-   git clone https://github.com/yourusername/timeslice-app.git
-   cd timeslice-app
+   git clone https://github.com/anoydesign/slice.git
+   cd slice
    ```
 
 2. バックエンドの依存関係をインストール
@@ -54,13 +54,13 @@
 
 1. バックエンドの起動
    ```
-   cd /path/to/timeslice-app
+   cd /path/to/slice
    go run cmd/main.go
    ```
 
 2. フロントエンドの起動
    ```
-   cd /path/to/timeslice-app/web/frontend
+   cd /path/to/slice/web/frontend
    npm run dev
    ```
 
