@@ -1,18 +1,18 @@
 "use client"; // Make this a client component
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Button } from "./components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Calendar as CalendarComponent } from "./components/ui/calendar";
+import { Button } from "@/app/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Calendar as CalendarComponent } from "@/app/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "./components/ui/popover";
+} from "@/app/components/ui/popover";
 import { CalendarIcon, Cross2Icon } from "@radix-ui/react-icons";
 import { format, isValid, parseISO, subDays } from "date-fns"; // Import isValid for date checking
 import { ja } from "date-fns/locale";
-import { cn } from "./lib/utils";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -21,26 +21,28 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./components/ui/table";
-import { Checkbox } from "./components/ui/checkbox";
-import { Input } from "./components/ui/input";
+} from "@/app/components/ui/table";
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { Input } from "@/app/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./components/ui/select";
-import { Badge } from "./components/ui/badge";
+} from "@/app/components/ui/select";
+import { Badge } from "@/app/components/ui/badge";
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableItem } from './components/SortableItem';
-import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { FrontendTimeEntry, DbItems, Preset } from './types';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
+import { Label } from "./components/ui/label";
+import { Textarea } from "./components/ui/textarea";
 
 // Define the base URL for the backend API
 const API_BASE_URL = "http://localhost:8080";
@@ -63,7 +65,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "meeting",
     name: "会議",
-    time: "1:00",
+    time: "30",
     content: "会議",
     client: "チーム",
     purpose: "進捗確認",
@@ -75,7 +77,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "development",
     name: "開発",
-    time: "2:00",
+    time: "30",
     content: "開発",
     client: "プロジェクト",
     purpose: "機能実装",
@@ -87,7 +89,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "break",
     name: "休憩",
-    time: "0:30",
+    time: "30",
     content: "休憩",
     client: "個人",
     purpose: "リフレッシュ",
@@ -99,7 +101,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "lunch",
     name: "昼食",
-    time: "1:00",
+    time: "30",
     content: "昼食",
     client: "個人",
     purpose: "食事",
@@ -111,7 +113,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "reporting",
     name: "報告書作成",
-    time: "1:00",
+    time: "30",
     content: "報告書作成",
     client: "社内",
     purpose: "ドキュメント作成",
@@ -123,7 +125,7 @@ const DEFAULT_PRESETS: Preset[] = [
   {
     id: "research",
     name: "リサーチ",
-    time: "1:30",
+    time: "30",
     content: "リサーチ",
     client: "プロジェクト",
     purpose: "情報収集",
@@ -151,6 +153,18 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null); // Error state
   const [lastUpdated, setLastUpdated] = useState<string>("まだ保存されていません");
   const [presets, setPresets] = useState<Preset[]>(DEFAULT_PRESETS);
+  
+  // プリセット編集用の状態
+  const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
+  const [newPresetName, setNewPresetName] = useState("");
+  const [newPresetContent, setNewPresetContent] = useState("");
+  const [newPresetClient, setNewPresetClient] = useState("");
+  const [newPresetPurpose, setNewPresetPurpose] = useState("");
+  const [newPresetAction, setNewPresetAction] = useState("");
+  const [newPresetWith, setNewPresetWith] = useState("");
+  const [newPresetPccc, setNewPresetPccc] = useState("P");
+  const [newPresetRemark, setNewPresetRemark] = useState("");
+  const [isEditingPreset, setIsEditingPreset] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -158,6 +172,97 @@ export default function Home() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // プリセットをローカルストレージから読み込む
+  useEffect(() => {
+    try {
+      const savedPresets = localStorage.getItem('timeslice-presets');
+      if (savedPresets) {
+        setPresets(JSON.parse(savedPresets));
+      }
+    } catch (error: unknown) {
+      console.error('プリセットの読み込みに失敗しました:', error);
+    }
+  }, []);
+
+  // プリセットをローカルストレージに保存する
+  useEffect(() => {
+    try {
+      localStorage.setItem('timeslice-presets', JSON.stringify(presets));
+    } catch (error: unknown) {
+      console.error('プリセットの保存に失敗しました:', error);
+    }
+  }, [presets]);
+
+  // プリセットを追加または更新する関数
+  const handleSavePreset = () => {
+    if (!newPresetName) return;
+
+    const presetData: Preset = {
+      id: selectedPreset ? selectedPreset.id : nanoid(),
+      name: newPresetName,
+      time: "30", // デフォルト値として30分を使用
+      content: newPresetContent,
+      client: newPresetClient,
+      purpose: newPresetPurpose,
+      action: newPresetAction,
+      with: newPresetWith,
+      pccc: newPresetPccc,
+      remark: newPresetRemark
+    };
+
+    if (selectedPreset) {
+      // 既存のプリセットを更新
+      setPresets(currentPresets => 
+        currentPresets.map(preset => 
+          preset.id === selectedPreset.id ? presetData : preset
+        )
+      );
+    } else {
+      // 新しいプリセットを追加
+      setPresets(currentPresets => [...currentPresets, presetData]);
+    }
+
+    // フォームをリセット
+    resetPresetForm();
+  };
+
+  // プリセットを削除する関数
+  const handleDeletePreset = (presetId: string) => {
+    if (confirm("このプリセットを削除してもよろしいですか？")) {
+      setPresets(currentPresets => 
+        currentPresets.filter(preset => preset.id !== presetId)
+      );
+    }
+  };
+
+  // プリセット編集フォームを開く関数
+  const handleEditPreset = (preset: Preset) => {
+    setSelectedPreset(preset);
+    setNewPresetName(preset.name);
+    setNewPresetContent(preset.content);
+    setNewPresetClient(preset.client);
+    setNewPresetPurpose(preset.purpose);
+    setNewPresetAction(preset.action);
+    setNewPresetWith(preset.with);
+    setNewPresetPccc(preset.pccc);
+    setNewPresetRemark(preset.remark);
+    setIsEditingPreset(true);
+  };
+
+  // フォームをリセットする関数
+  const resetPresetForm = () => {
+    setSelectedPreset(null);
+    setNewPresetName("");
+    setNewPresetContent("");
+    setNewPresetClient("");
+    setNewPresetPurpose("");
+    setNewPresetAction("");
+    setNewPresetWith("");
+    setNewPresetPccc("P");
+    setNewPresetRemark("");
+    setIsEditingPreset(false);
+  };
 
   // Function to fetch time entries for a given date
   const fetchTimeEntries = async () => {
@@ -645,9 +750,32 @@ export default function Home() {
   };
 
   const handleAddPreset = (preset: Preset) => {
+    // 最後のエントリーを取得
+    const lastEntry = timeEntries.length > 0 ? timeEntries[timeEntries.length - 1] : null;
+    
+    let newTime = "";
+    if (!lastEntry) {
+      // エントリーがない場合は、業務開始時間から始める
+      const endTime = getNextTimeSlot(startWorkTime);
+      newTime = `${startWorkTime} - ${endTime}`;
+    } else {
+      // 最後のエントリーの終了時間を取得
+      const timeParts = lastEntry.time.split(" - ");
+      if (timeParts.length === 2) {
+        const lastEndTime = timeParts[1];
+        // 30分（1行）単位で計算する
+        const nextEndTime = getNextTimeSlot(lastEndTime);
+        newTime = `${lastEndTime} - ${nextEndTime}`;
+      } else {
+        // 時間形式が不正な場合は、startWorkTimeから始める
+        const endTime = getNextTimeSlot(startWorkTime);
+        newTime = `${startWorkTime} - ${endTime}`;
+      }
+    }
+
     const newEntry: FrontendTimeEntry = {
       id: nanoid(),
-      time: preset.time,
+      time: newTime,
       content: preset.content,
       client: preset.client,
       purpose: preset.purpose,
@@ -1356,6 +1484,184 @@ export default function Home() {
                   <Button onClick={handleAddDbItem} disabled={!newDbItemValue.trim()}>追加</Button>
                 </div>
               </div>
+            </div>
+
+            {/* プリセット管理セクション */}
+            <div className="preset-manager bg-muted/30 rounded-lg p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">クイックプリセット管理</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    resetPresetForm();
+                    setIsEditingPreset(true);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  新しいプリセットを作成
+                </Button>
+              </div>
+              
+              {isEditingPreset ? (
+                <div className="preset-form bg-card p-4 rounded-lg border shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-name">プリセット名</Label>
+                      <Input
+                        id="preset-name"
+                        value={newPresetName}
+                        onChange={(e) => setNewPresetName(e.target.value)}
+                        placeholder="会議、昼食など"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-content">内容</Label>
+                      <Input
+                        id="preset-content"
+                        value={newPresetContent}
+                        onChange={(e) => setNewPresetContent(e.target.value)}
+                        placeholder="会議、開発など"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-client">クライアント</Label>
+                      <Input
+                        id="preset-client"
+                        value={newPresetClient}
+                        onChange={(e) => setNewPresetClient(e.target.value)}
+                        placeholder="社内、チームなど"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-purpose">目的</Label>
+                      <Input
+                        id="preset-purpose"
+                        value={newPresetPurpose}
+                        onChange={(e) => setNewPresetPurpose(e.target.value)}
+                        placeholder="進捗確認、情報共有など"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-action">アクション</Label>
+                      <Input
+                        id="preset-action"
+                        value={newPresetAction}
+                        onChange={(e) => setNewPresetAction(e.target.value)}
+                        placeholder="会議実施、資料作成など"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-with">誰と</Label>
+                      <Input
+                        id="preset-with"
+                        value={newPresetWith}
+                        onChange={(e) => setNewPresetWith(e.target.value)}
+                        placeholder="個人、チームメンバーなど"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preset-pccc">PC/CC</Label>
+                      <Input
+                        id="preset-pccc"
+                        value={newPresetPccc}
+                        onChange={(e) => setNewPresetPccc(e.target.value)}
+                        placeholder="P, C, CCなど"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 mb-4">
+                    <Label htmlFor="preset-remark">備考</Label>
+                    <Textarea
+                      id="preset-remark"
+                      value={newPresetRemark}
+                      onChange={(e) => setNewPresetRemark(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={resetPresetForm}>キャンセル</Button>
+                    <Button onClick={handleSavePreset} disabled={!newPresetName}>
+                      {selectedPreset ? "更新" : "作成"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="presets-list space-y-2">
+                  <div className="flex justify-between items-center px-4 py-2 bg-muted rounded-md font-medium text-sm">
+                    <span className="w-1/3">プリセット名</span>
+                    <span className="w-1/3">内容</span>
+                    <span className="w-1/3">クライアント</span>
+                    <span className="w-1/6">操作</span>
+                  </div>
+                  {presets.map((preset) => (
+                    <div key={preset.id} className="flex justify-between items-center px-4 py-3 bg-card rounded-md border hover:border-primary transition-colors">
+                      <span className="w-1/3 font-medium">{preset.name}</span>
+                      <span className="w-1/3 text-muted-foreground truncate">{preset.content}</span>
+                      <span className="w-1/3 text-muted-foreground truncate">{preset.client}</span>
+                      <span className="w-1/6 flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEditPreset(preset)}
+                          className="h-8 w-8"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                            <path d="m15 5 4 4"></path>
+                          </svg>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDeletePreset(preset.id)}
+                          className="h-8 w-8 text-destructive"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                          </svg>
+                        </Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* DB Sections */} 
