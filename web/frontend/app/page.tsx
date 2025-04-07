@@ -430,48 +430,31 @@ export default function Home() {
       }
       const spreadsheetData = await spreadsheetResponse.json();
 
-      // データをDbItems型に変換
-      const transformedData: DbItems = {
-        content: [],
-        client: [],
-        purpose: [],
-        action: [],
-        with: [],
-        pccc: [],
-        remark: []
+      // スプレッドシートからのデータを現在のデータと統合
+      const mergedData: DbItems = {
+        content: [...dbItems.content],
+        client: [...dbItems.client],
+        purpose: [...dbItems.purpose],
+        action: [...dbItems.action],
+        with: [...dbItems.with],
+        pccc: [...dbItems.pccc],
+        remark: [...dbItems.remark]
       };
 
-      // スプレッドシートのデータを追加
-      if (Array.isArray(spreadsheetData)) {
-        spreadsheetData.forEach((item: { Type?: string; Value?: string }) => {
-          if (item?.Type && item?.Value) {
-            const type = item.Type.toLowerCase();
-            if (type in transformedData) {
-              transformedData[type as keyof DbItems].push(item.Value);
-            }
+      // スプレッドシートのデータを追加（重複を避ける）
+      if (spreadsheetData && typeof spreadsheetData === 'object') {
+        Object.keys(spreadsheetData).forEach(key => {
+          const typedKey = key as keyof DbItems;
+          if (typedKey in mergedData && Array.isArray(spreadsheetData[typedKey])) {
+            // 既存の項目と新しい項目をマージして重複を排除
+            const uniqueSet = new Set([...mergedData[typedKey], ...spreadsheetData[typedKey]]);
+            mergedData[typedKey] = Array.from(uniqueSet);
           }
         });
       }
 
-      // データを保存
-      const saveResponse = await fetch(`${API_BASE_URL}/api/db-items`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(Object.entries(transformedData).flatMap(([type, values]) =>
-          values.map((value: string) => ({
-            Type: type,
-            Value: value
-          }))
-        )),
-      });
-
-      if (!saveResponse.ok) {
-        throw new Error('データの保存に失敗しました');
-      }
-
-      setDbItems(transformedData);
+      // UIのみを更新（スプレッドシートは更新しない）
+      setDbItems(mergedData);
       showTemporaryMessage('インポートが完了しました', 'success');
     } catch (err: any) {
       console.error("Failed to import DB items:", err);
