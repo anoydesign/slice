@@ -129,41 +129,74 @@ h1 {
     border: none;
     cursor: pointer;
     font-size: 16px;
-    padding: 0 4px;
-    color: #7f8c8d;
-    transition: color 0.3s ease;
-    vertical-align: middle;
+    padding: 8px;
+    color: #adb5bd;
+    transition: color 0.2s, background-color 0.2s;
+    border-radius: 6px;
+    margin-left: 4px;
 }
 
 .icon-btn:hover {
-    color: #333;
+    color: #495057;
+    background-color: #f8f9fa;
 }
 
 table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0 8px;
     margin-bottom: 20px;
 }
 
-th, td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: left;
+th {
+    background-color: transparent;
+    font-weight: 600;
+    color: #6c757d;
+    border: none;
+    padding: 12px 16px;
+    font-size: 14px;
+}
+
+td {
+    background-color: white;
+    border: none;
+    padding: 12px 16px;
     vertical-align: middle;
 }
 
-th {
-    background-color: #ecf0f1;
-    font-weight: bold;
+tr {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+tbody tr {
+    background-color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+}
+
+tbody tr:hover {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+tbody tr td:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    padding-left: 8px;
+}
+
+tbody tr td:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
 }
 
 td input.time-input {
-    width: 80px;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    width: 120px;
+    padding: 8px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
     box-sizing: border-box;
-    text-align: center;
+    font-size: 14px;
+    margin-left: 8px;
 }
 
 td input.task-input,
@@ -171,19 +204,62 @@ td input.function-input,
 td input.mall-input,
 td input.remark-input {
     width: 95%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 8px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
     box-sizing: border-box;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+td input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
 .time-column {
-    width: 100px;
+    width: 160px;
+    display: flex;
+    align-items: center;
+    padding-right: 16px;
+}
+
+.drag-handle {
+    display: inline-block;
+    margin-right: 8px;
+    color: #888;
+    cursor: grab;
+    user-select: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    font-size: 16px;
+    touch-action: none;
+}
+
+.drag-handle:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    background-color: #e0e0e0;
+}
+
+tr.dragging {
+    opacity: 0.5;
+    background-color: #f8f9fa;
+}
+
+tr.dragging .drag-handle {
+    cursor: grabbing;
 }
 
 .action-cell {
     width: 100px;
-    text-align: center;
+    text-align: right;
 }
 
 .stats {

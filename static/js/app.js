@@ -93,7 +93,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (event.target.classList.contains('delete-row-btn')) {
                 const row = event.target.closest('tr');
                 if (row) {
+                    const nextRow = row.nextElementSibling;
                     row.remove();
+                    
+                    // 削除後の行の時間を更新
+                    const rows = timeEntriesTable.querySelectorAll('tbody tr');
+                    if (rows.length > 0) {
+                        let currentTime = rows[0].querySelector('.time-input').value.split(' - ')[0];
+                        rows.forEach(row => {
+                            const timeInput = row.querySelector('.time-input');
+                            const nextTime = getNextTimeSlot(currentTime);
+                            timeInput.value = `${currentTime} - ${nextTime}`;
+                            currentTime = nextTime;
+                        });
+                    }
+                    
                     updateStats();
                 }
             } else if (event.target.classList.contains('duplicate-row-btn')) {
@@ -124,75 +138,68 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // ドラッグ・アンド・ドロップのイベントリスナーを追加
-        timeEntriesTable.addEventListener('dragstart', handleDragStart);
-        timeEntriesTable.addEventListener('dragover', handleDragOver);
-        timeEntriesTable.addEventListener('drop', handleDrop);
-        timeEntriesTable.addEventListener('dragend', handleDragEnd);
-
-        // 各行にドラッグ可能な属性を追加
-        const rows = timeEntriesTable.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-            row.setAttribute('draggable', 'true');
-            row.addEventListener('dragstart', () => {
-                row.classList.add('dragging');
-            });
-            row.addEventListener('dragend', () => {
-                row.classList.remove('dragging');
-            });
-        });
-    }
-
-    function handleDragStart(e) {
-        if (!e.target.closest('tr')) return;
-        const row = e.target.closest('tr');
-        e.dataTransfer.setData('text/plain', row.dataset.index);
-        row.classList.add('dragging');
-    }
-
-    function handleDragOver(e) {
-        e.preventDefault();
-        const draggingRow = timeEntriesTable.querySelector('.dragging');
-        if (!draggingRow) return;
-
-        const rows = [...timeEntriesTable.querySelectorAll('tbody tr:not(.dragging)')];
-        const closestRow = rows.reduce((closest, row) => {
-            const box = row.getBoundingClientRect();
-            const offset = e.clientY - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: row };
+        // ドラッグ・アンド・ドロップのイベントリスナー
+        timeEntriesTable.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const draggingRow = timeEntriesTable.querySelector('.dragging');
+            if (!draggingRow) return;
+            
+            const rows = [...timeEntriesTable.querySelectorAll('tr:not(.dragging)')];
+            const closestRow = rows.reduce((closest, row) => {
+                const box = row.getBoundingClientRect();
+                const offset = e.clientY - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: row };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+            
+            if (closestRow) {
+                timeEntriesTable.insertBefore(draggingRow, closestRow);
             } else {
-                return closest;
+                timeEntriesTable.appendChild(draggingRow);
             }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-
-        if (closestRow) {
-            timeEntriesTable.querySelector('tbody').insertBefore(draggingRow, closestRow);
-        } else {
-            timeEntriesTable.querySelector('tbody').appendChild(draggingRow);
-        }
-    }
-
-    function handleDrop(e) {
-        e.preventDefault();
-        updateTimeSlots();
-    }
-
-    function handleDragEnd(e) {
-        const row = e.target.closest('tr');
-        if (row) {
-            row.classList.remove('dragging');
-        }
+        });
+        
+        timeEntriesTable.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const rows = timeEntriesTable.querySelectorAll('tbody tr');
+            if (rows.length === 0) return;
+            
+            // 最初の行の開始時間を取得
+            const firstTimeInput = rows[0].querySelector('.time-input');
+            const firstTime = firstTimeInput.value.split(' - ')[0];
+            
+            // すべての行の時間を更新
+            let currentTime = firstTime;
+            rows.forEach(row => {
+                const timeInput = row.querySelector('.time-input');
+                const nextTime = getNextTimeSlot(currentTime);
+                timeInput.value = `${currentTime} - ${nextTime}`;
+                currentTime = nextTime;
+            });
+            
+            updateStats();
+        });
     }
 
     function updateTimeSlots() {
         const rows = timeEntriesTable.querySelectorAll('tbody tr');
-        let currentTime = rows[0].querySelector('td:first-child').textContent.split(' - ')[0];
+        if (rows.length === 0) return;
+
+        // 最初の行の開始時間を取得
+        const firstTimeInput = rows[0].querySelector('.time-input');
+        const firstTime = firstTimeInput.value.split(' - ')[0];
         
+        // すべての行の時間を更新
+        let currentTime = firstTime;
         rows.forEach(row => {
-            const timeCell = row.querySelector('td:first-child');
+            const timeInput = row.querySelector('.time-input');
             const nextTime = getNextTimeSlot(currentTime);
-            timeCell.textContent = `${currentTime} - ${nextTime}`;
+            timeInput.value = `${currentTime} - ${nextTime}`;
             currentTime = nextTime;
         });
     }
@@ -299,19 +306,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function createRow(time = '', task = '', functionValue = '', mall = '', remark = '') {
         const row = timeEntriesTable.insertRow();
+        const endTime = time ? getNextTimeSlot(time) : '';
+        const timeValue = time && endTime ? `${time} - ${endTime}` : '';
+        
         row.innerHTML = `
             <td class="time-column">
-                <input type="text" class="time-input" value="${time}" placeholder="例: 9:00 - 9:30">
+                <div class="drag-handle" draggable="true">⋮⋮</div>
+                <input type="text" class="time-input" value="${timeValue}" placeholder="例: 9:00 - 9:30">
             </td>
-            <td><input type="text" class="task-input" value="${task}"></td>
-            <td><input type="text" class="function-input" value="${functionValue}"></td>
-            <td><input type="text" class="mall-input" value="${mall}"></td>
-            <td><input type="text" class="remark-input" value="${remark}"></td>
+            <td><input type="text" class="task-input" value="${task}" placeholder="内容を入力"></td>
+            <td><input type="text" class="function-input" value="${functionValue}" placeholder="機能を選択"></td>
+            <td><input type="text" class="mall-input" value="${mall}" placeholder="モールを選択"></td>
+            <td><input type="text" class="remark-input" value="${remark}" placeholder="備考を入力"></td>
             <td class="action-cell">
                 <button class="icon-btn duplicate-row-btn" title="この行を複製">📋</button>
                 <button class="icon-btn delete-row-btn" title="この行を削除">✖</button>
             </td>
         `;
+        
+        const dragHandle = row.querySelector('.drag-handle');
+        
+        dragHandle.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', row.rowIndex);
+            row.classList.add('dragging');
+        });
+        
+        dragHandle.addEventListener('dragend', () => {
+            row.classList.remove('dragging');
+        });
+        
         attachSuggestionEvents(row);
     }
 
@@ -370,54 +394,75 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function duplicateRow(button) {
         const row = button.closest('tr');
-        const timeCell = row.querySelector('td:first-child');
-        const currentTime = timeCell.textContent;
-        const [startTime, endTime] = currentTime.split(' - ');
-
+        const timeInput = row.querySelector('.time-input');
+        const [startTime, endTime] = (timeInput.value || '').split(' - ');
+        
+        if (!startTime || !endTime) {
+            showTemporaryMessage('時間が正しく設定されていません', 'error');
+            return;
+        }
+        
         // 新しい時間を計算
         const newStartTime = endTime;
-        const newEndTime = getNextTimeSlot(endTime);
-
-        // 時間が重複していないかチェック
-        const rows = timeEntriesTable.querySelectorAll('tbody tr');
-        let isTimeAvailable = true;
-        rows.forEach(existingRow => {
-            const existingTime = existingRow.querySelector('td:first-child').textContent;
-            if (existingTime.startsWith(newStartTime)) {
-                isTimeAvailable = false;
-            }
-        });
-
-        if (!isTimeAvailable) {
-            // 重複している場合は、それ以降の時間をすべて更新
-            let currentTime = newStartTime;
-            let nextTime = newEndTime;
-            let foundRow = false;
-
-            rows.forEach(existingRow => {
-                if (foundRow) {
-                    const timeCell = existingRow.querySelector('td:first-child');
-                    timeCell.textContent = `${currentTime} - ${nextTime}`;
-                    currentTime = nextTime;
-                    nextTime = getNextTimeSlot(nextTime);
-                } else if (existingRow.querySelector('td:first-child').textContent.startsWith(currentTime)) {
-                    foundRow = true;
-                }
-            });
-        }
-
-        // 新しい行を作成
-        const newRow = row.cloneNode(true);
-        const newTimeCell = newRow.querySelector('td:first-child');
-        newTimeCell.textContent = `${newStartTime} - ${newEndTime}`;
-
-        // 入力フィールドをクリア
-        newRow.querySelectorAll('input').forEach(input => {
-            input.value = '';
-        });
-
+        const newEndTime = getNextTimeSlot(newStartTime);
+        
+        // 複製元の内容を取得
+        const task = row.querySelector('.task-input').value;
+        const functionValue = row.querySelector('.function-input').value;
+        const mall = row.querySelector('.mall-input').value;
+        const remark = row.querySelector('.remark-input').value;
+        
+        // 新しい行を作成（直後に挿入）
+        const tbody = timeEntriesTable.querySelector('tbody') || timeEntriesTable;
+        const newRow = document.createElement('tr');
+        const timeValue = `${newStartTime} - ${newEndTime}`;
+        
+        newRow.innerHTML = `
+            <td class="time-column">
+                <div class="drag-handle" draggable="true">⋮⋮</div>
+                <input type="text" class="time-input" value="${timeValue}" placeholder="例: 9:00 - 9:30">
+            </td>
+            <td><input type="text" class="task-input" value="${task}" placeholder="内容を入力"></td>
+            <td><input type="text" class="function-input" value="${functionValue}" placeholder="機能を選択"></td>
+            <td><input type="text" class="mall-input" value="${mall}" placeholder="モールを選択"></td>
+            <td><input type="text" class="remark-input" value="${remark}" placeholder="備考を入力"></td>
+            <td class="action-cell">
+                <button class="icon-btn duplicate-row-btn" title="この行を複製">📋</button>
+                <button class="icon-btn delete-row-btn" title="この行を削除">✖</button>
+            </td>
+        `;
+        
         // 行を挿入
-        row.parentNode.insertBefore(newRow, row.nextSibling);
+        if (row.nextElementSibling) {
+            tbody.insertBefore(newRow, row.nextElementSibling);
+        } else {
+            tbody.appendChild(newRow);
+        }
+        
+        const dragHandle = newRow.querySelector('.drag-handle');
+        
+        dragHandle.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', newRow.rowIndex);
+            newRow.classList.add('dragging');
+        });
+        
+        dragHandle.addEventListener('dragend', () => {
+            newRow.classList.remove('dragging');
+        });
+        
+        // 後続の行の時間を更新
+        let currentTime = newEndTime;
+        let nextRow = newRow.nextElementSibling;
+        while (nextRow) {
+            const nextTimeInput = nextRow.querySelector('.time-input');
+            const nextEndTime = getNextTimeSlot(currentTime);
+            nextTimeInput.value = `${currentTime} - ${nextEndTime}`;
+            currentTime = nextEndTime;
+            nextRow = nextRow.nextElementSibling;
+        }
+        
+        // イベントリスナーを再設定
         attachSuggestionEvents(newRow);
         updateStats();
     }
@@ -428,7 +473,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let hasError = false;
 
         rows.forEach(row => {
-            const time = row.querySelector('td:first-child').textContent;
+            const timeInput = row.querySelector('.time-input');
+            const time = timeInput.value;
             const task = row.querySelector('td:nth-child(2) input').value;
             const functionValue = row.querySelector('td:nth-child(3) input').value;
             const mall = row.querySelector('td:nth-child(4) input').value;
