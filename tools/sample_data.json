@@ -1,0 +1,13 @@
+{
+  "db_items": [
+    {"type": "task", "value": "開発"},
+    {"type": "task", "value": "会議"},
+    {"type": "task", "value": "休憩"},
+    {"type": "function", "value": "フロントエンド"},
+    {"type": "function", "value": "バックエンド"},
+    {"type": "function", "value": "インフラ"},
+    {"type": "mall", "value": "A店舗"},
+    {"type": "mall", "value": "B店舗"},
+    {"type": "mall", "value": "C店舗"}
+  ]
+} 

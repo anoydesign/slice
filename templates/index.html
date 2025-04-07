@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タイムスライス入力ツール</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p id="loading-message">読み込み中...</p>
+        </div>
+        <h1>タイムスライス入力ツール</h1>
+        <div class="tabs">
+            <div class="tab active" data-tab="time-input">タイム入力</div>
+            <div class="tab" data-tab="database">業務データベース</div>
+        </div>
+        <div id="time-input-tab" class="tab-content active">
+            <div class="header-controls">
+                <div class="date-selector">
+                    <label for="date">日付:</label>
+                    <input type="date" id="date" value="">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="import-btn">インポート</button>
+                    <button class="btn btn-secondary" id="yesterday-btn">昨日と同じ</button>
+                    <button class="btn btn-secondary" id="last-week-btn">先週と同じ</button>
+                    <button class="btn" id="save-btn">保存する</button>
+                </div>
+            </div>
+            <div class="presets">
+                <h3>クイックプリセット (クリックで内容入力)</h3>
+                <div class="preset-tags" id="preset-tags">
+                    <span class="preset-tag" data-content="会議">会議 (初期表示例)</span>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="time-column">時間</th>
+                        <th>内容</th>
+                        <th>機能別</th>
+                        <th>モール別</th>
+                        <th>備考</th>
+                        <th class="action-cell">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="time-entries"></tbody>
+            </table>
+            <button class="btn btn-secondary" id="add-row-btn">+ 新しい時間枠を追加</button>
+            <div class="stats">
+                <div class="stat-item">合計時間 <span id="total-hours">0.0 時間</span></div>
+                <div class="stat-item">スライス数 <span id="total-slices">0</span></div>
+            </div>
+            <div class="footer">
+                <div class="footer-actions">
+                    <button class="btn" id="save-bottom-btn">保存する</button>
+                </div>
+                <span id="last-updated">最終更新: まだ保存されていません</span>
+            </div>
+        </div>
+        <div id="database-tab" class="tab-content">
+            <h2>業務データベース管理</h2>
+            <p>よく使う項目を登録・削除できます。変更は自動で保存されます。</p>
+            <div class="header-controls">
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="db-import-btn">スプレッドシートからインポート</button>
+                </div>
+            </div>
+            <div class="db-add-form">
+                <select id="db-type">
+                    <option value="task">内容</option>
+                    <option value="function">機能別</option>
+                    <option value="mall">モール別</option>
+                    <option value="remark">備考</option>
+                </select>
+                <input type="text" id="db-value" placeholder="登録する項目名">
+                <button class="btn" id="db-add-btn">追加</button>
+            </div>
+            <div class="database-section">
+                <h3>登録済み: 内容</h3>
+                <div class="database-items" id="task-items"></div>
+            </div>
+            <div class="database-section">
+                <h3>登録済み: 機能別</h3>
+                <div class="database-items" id="function-items"></div>
+            </div>
+            <div class="database-section">
+                <h3>登録済み: モール別</h3>
+                <div class="database-items" id="mall-items"></div>
+            </div>
+            <div class="database-section">
+                <h3>登録済み: 備考</h3>
+                <div class="database-items" id="remark-items"></div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html> 
