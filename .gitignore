@@ -31,4 +31,7 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
-credentials.json 
+credentials.json
+
+# Next.js build output
+.next/ 
