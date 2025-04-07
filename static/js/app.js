@@ -268,9 +268,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadYesterdayEntries() {
+        const currentDate = dateInput.value;
         const yesterday = getOffsetDate(-1);
-        dateInput.value = yesterday;
         loadEntriesForSelectedDate(yesterday, true);
+        dateInput.value = currentDate; // 日付を元に戻す
     }
 
     function loadLastWeekEntries() {
